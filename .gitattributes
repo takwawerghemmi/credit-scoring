@@ -1,0 +1,8 @@
+/mvnw text eol=lf
+*.cmd text eol=crlf
+target/
+*.class
+.idea/
+*.iml
+.DS_Store
+*.log
