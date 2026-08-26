@@ -1,0 +1,25 @@
+package com.creditscoring.enums;
+
+public enum TypeFraude {
+
+    AUCUNE,
+
+    MONTANT_SUSPECT,
+
+    REVENU_INCOHERENT,
+
+    DOCUMENT_FAUX,
+
+    IDENTITE_SUSPECTE,
+
+    MULTIPLES_DEMANDES,
+
+    HISTORIQUE_SUSPECT,
+
+    SCORE_INCOHERENT,
+
+    USURPATION_IDENTITE,
+
+    FRAUDE_POTENTIELLE
+
+}

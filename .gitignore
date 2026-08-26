@@ -31,3 +31,29 @@ build/
 
 ### VS Code ###
 .vscode/
+.env
+
+# Environment / secrets
+.env
+.env.*
+
+# Python AI environment
+ai_env/
+__pycache__/
+*.pyc
+
+# CatBoost generated files
+catboost_info/
+
+# Generated reports
+reports/
+
+# ZIP / archives
+*.zip
+
+# IDE
+.idea/
+*.iml
+
+# Runtime uploads
+uploads/
