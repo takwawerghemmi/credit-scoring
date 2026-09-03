@@ -48,11 +48,19 @@ public class Utilisateur {
     @JsonBackReference
     private Role role;
 
-    @Column(
-            name = "face_descriptor",
-            columnDefinition = "TEXT"
-    )
+    @Column(name = "face_descriptor", columnDefinition = "TEXT")
     private String faceDescriptor;
+
+    /*
+     * Chemin de la signature du Responsable Crédit.
+     *
+     * Exemple :
+     * uploads/signatures/signature_5.png
+     *
+     * Chaque Responsable peut avoir sa propre signature.
+     */
+    @Column(name = "signature_path")
+    private String signaturePath;
 
     @PrePersist
     public void prePersist() {

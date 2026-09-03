@@ -1,17 +1,25 @@
 package com.creditscoring.service;
 
 import com.creditscoring.dto.reponse.DocumentResponse;
+import com.creditscoring.entity.Administrateur;
+import com.creditscoring.entity.Client;
+import com.creditscoring.entity.Conseiller;
 import com.creditscoring.entity.DemandeCredit;
 import com.creditscoring.entity.Document;
+import com.creditscoring.entity.ResponsableCredit;
+import com.creditscoring.entity.Utilisateur;
 import com.creditscoring.enums.StatutDocument;
 import com.creditscoring.enums.TypeDocument;
 import com.creditscoring.mapper.DocumentMapper;
 import com.creditscoring.repository.DemandeCreditRepository;
 import com.creditscoring.repository.DocumentRepository;
+import com.creditscoring.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,14 +38,15 @@ public class DocumentServiceImpl implements DocumentService {
 
     private final DocumentRepository documentRepository;
     private final DemandeCreditRepository demandeRepository;
+    private final UtilisateurRepository utilisateurRepository;
 
     @Value("${app.document.upload-dir:./uploads/documents}")
     private String uploadDir;
 
+    // =========================================================
+    // UPLOAD
+    // =========================================================
 
-    // =========================================================
-    // UPLOAD REEL DU FICHIER
-    // =========================================================
     @Override
     public DocumentResponse ajouterFichier(
             MultipartFile file,
@@ -46,31 +55,24 @@ public class DocumentServiceImpl implements DocumentService {
             Long demandeCreditId
     ) {
 
-        // -----------------------------------------------------
-        // 1. Vérifier le fichier
-        // -----------------------------------------------------
         if (file == null || file.isEmpty()) {
             throw new RuntimeException(
                     "Veuillez sélectionner un fichier."
             );
         }
 
+        DemandeCredit demande =
+                demandeRepository.findById(demandeCreditId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Demande de crédit introuvable."
+                                )
+                        );
 
-        // -----------------------------------------------------
-        // 2. Vérifier la demande de crédit
-        // -----------------------------------------------------
-        DemandeCredit demande = demandeRepository
-                .findById(demandeCreditId)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Demande de crédit introuvable."
-                        )
-                );
+        // Vérification de sécurité
+        verifierAccesDemande(demande);
 
-
-        // -----------------------------------------------------
-        // 3. Vérifier la taille maximale : 10 MB
-        // -----------------------------------------------------
+        // Taille maximale : 10 MB
         long maxSize = 10 * 1024 * 1024;
 
         if (file.getSize() > maxSize) {
@@ -79,11 +81,8 @@ public class DocumentServiceImpl implements DocumentService {
             );
         }
 
-
-        // -----------------------------------------------------
-        // 4. Nom original
-        // -----------------------------------------------------
-        String originalFilename = file.getOriginalFilename();
+        String originalFilename =
+                file.getOriginalFilename();
 
         if (originalFilename == null
                 || originalFilename.trim().isEmpty()) {
@@ -93,20 +92,13 @@ public class DocumentServiceImpl implements DocumentService {
             );
         }
 
+        originalFilename =
+                Paths.get(originalFilename)
+                        .getFileName()
+                        .toString();
 
-        // -----------------------------------------------------
-        // 5. Nettoyer le nom
-        // -----------------------------------------------------
-        originalFilename = Paths
-                .get(originalFilename)
-                .getFileName()
-                .toString();
-
-
-        // -----------------------------------------------------
-        // 6. Vérifier extension
-        // -----------------------------------------------------
-        String extension = getExtension(originalFilename);
+        String extension =
+                getExtension(originalFilename);
 
         if (!extension.equals("pdf")
                 && !extension.equals("png")
@@ -119,17 +111,14 @@ public class DocumentServiceImpl implements DocumentService {
             );
         }
 
-
-        // -----------------------------------------------------
-        // 7. Vérifier le type du document
-        // -----------------------------------------------------
         TypeDocument typeDocument;
 
         try {
 
-            typeDocument = TypeDocument.valueOf(
-                    type.trim().toUpperCase()
-            );
+            typeDocument =
+                    TypeDocument.valueOf(
+                            type.trim().toUpperCase()
+                    );
 
         } catch (IllegalArgumentException e) {
 
@@ -138,15 +127,12 @@ public class DocumentServiceImpl implements DocumentService {
             );
         }
 
-
-        // -----------------------------------------------------
-        // 8. Vérifier doublon
-        // -----------------------------------------------------
-        boolean existe = documentRepository
-                .existsByNomAndDemandeCreditId(
-                        nom,
-                        demande.getId()
-                );
+        boolean existe =
+                documentRepository
+                        .existsByNomAndDemandeCreditId(
+                                nom,
+                                demande.getId()
+                        );
 
         if (existe) {
 
@@ -155,31 +141,23 @@ public class DocumentServiceImpl implements DocumentService {
             );
         }
 
+        Path baseDirectory =
+                Paths.get(uploadDir)
+                        .toAbsolutePath()
+                        .normalize();
 
-        // -----------------------------------------------------
-        // 9. Dossier principal
-        //
-        // Exemple :
-        // /home/takwa/credit-scoring/uploads/documents
-        // -----------------------------------------------------
-        Path baseDirectory = Paths
-                .get(uploadDir)
-                .toAbsolutePath()
-                .normalize();
-
-        // -----------------------------------------------------
-        // 10. Dossier de la demande
-        //
-        // Exemple :
-        // uploads/documents/demande-2
-        // -----------------------------------------------------
-        Path demandeDirectory = baseDirectory
-                .resolve("demande-" + demande.getId())
-                .normalize();
+        Path demandeDirectory =
+                baseDirectory
+                        .resolve(
+                                "demande-" + demande.getId()
+                        )
+                        .normalize();
 
         try {
 
-            Files.createDirectories(demandeDirectory);
+            Files.createDirectories(
+                    demandeDirectory
+            );
 
         } catch (IOException e) {
 
@@ -189,20 +167,26 @@ public class DocumentServiceImpl implements DocumentService {
             );
         }
 
+        String baseName =
+                originalFilename;
 
-        // -----------------------------------------------------
-        // 11. Générer un nom sécurisé et unique
-        // -----------------------------------------------------
-        String baseName = originalFilename;
-
-        int dotIndex = baseName.lastIndexOf('.');
+        int dotIndex =
+                baseName.lastIndexOf('.');
 
         if (dotIndex > 0) {
-            baseName = baseName.substring(0, dotIndex);
+
+            baseName =
+                    baseName.substring(
+                            0,
+                            dotIndex
+                    );
         }
 
-        baseName = baseName
-                .replaceAll("[^a-zA-Z0-9_-]", "_");
+        baseName =
+                baseName.replaceAll(
+                        "[^a-zA-Z0-9_-]",
+                        "_"
+                );
 
         String storedFilename =
                 baseName
@@ -211,27 +195,20 @@ public class DocumentServiceImpl implements DocumentService {
                         + "."
                         + extension;
 
+        Path targetPath =
+                demandeDirectory
+                        .resolve(storedFilename)
+                        .normalize();
 
-        // -----------------------------------------------------
-        // 12. Chemin physique du fichier
-        // -----------------------------------------------------
-        Path targetPath = demandeDirectory
-                .resolve(storedFilename)
-                .normalize();
-
-
-        // Sécurité
-        if (!targetPath.startsWith(demandeDirectory)) {
+        if (!targetPath.startsWith(
+                demandeDirectory
+        )) {
 
             throw new RuntimeException(
                     "Chemin de fichier invalide."
             );
         }
 
-
-        // -----------------------------------------------------
-        // 13. UPLOAD REEL
-        // -----------------------------------------------------
         try {
 
             Files.copy(
@@ -248,158 +225,469 @@ public class DocumentServiceImpl implements DocumentService {
             );
         }
 
+        String contentType =
+                file.getContentType();
 
-        // -----------------------------------------------------
-        // 14. Content-Type
-        // -----------------------------------------------------
-        String contentType = file.getContentType();
+        if (contentType == null
+                || contentType.isBlank()) {
 
-        if (contentType == null || contentType.isBlank()) {
-            contentType = detectContentType(targetPath);
+            contentType =
+                    detectContentType(
+                            targetPath
+                    );
         }
 
-
-        // -----------------------------------------------------
-        // 15. IMPORTANT :
-        // chemin relatif enregistré dans la DB
-        //
-        // Exemple :
-        // demande-2/CIN_Yassine_xxx.pdf
-        //
-        // PAS :
-        // uploads/documents/demande-2/...
-        // -----------------------------------------------------
         String cheminRelatif =
                 "demande-"
                         + demande.getId()
                         + "/"
                         + storedFilename;
 
+        Document document =
+                Document.builder()
+                        .nom(nom)
+                        .type(type)
+                        .cheminFichier(
+                                cheminRelatif
+                        )
+                        .typeDocument(
+                                typeDocument
+                        )
+                        .statutDocument(
+                                StatutDocument.EN_ATTENTE
+                        )
+                        .tailleFichier(
+                                file.getSize()
+                        )
+                        .contentType(
+                                contentType
+                        )
+                        .demandeCredit(
+                                demande
+                        )
+                        .build();
 
-        // -----------------------------------------------------
-        // 16. Créer Document
-        // -----------------------------------------------------
-        Document document = Document.builder()
-                .nom(nom)
-                .type(type)
-                .cheminFichier(cheminRelatif)
-                .typeDocument(typeDocument)
-                .statutDocument(StatutDocument.EN_ATTENTE)
-                .tailleFichier(file.getSize())
-                .contentType(contentType)
-                .demandeCredit(demande)
-                .build();
-
-
-        // -----------------------------------------------------
-        // 17. Sauvegarder dans DB
-        // -----------------------------------------------------
         Document savedDocument =
-                documentRepository.save(document);
+                documentRepository.save(
+                        document
+                );
 
-
-        // -----------------------------------------------------
-        // 18. Réponse
-        // -----------------------------------------------------
-        return DocumentMapper.toResponse(savedDocument);
+        return DocumentMapper.toResponse(
+                savedDocument
+        );
     }
 
+    // =========================================================
+    // GET ALL ACCESSIBLES
+    // =========================================================
 
-    // =========================================================
-    // GET ALL DOCUMENTS
-    // =========================================================
     @Override
     public List<DocumentResponse> afficherTous() {
 
+        Utilisateur utilisateurConnecte =
+                getUtilisateurConnecte();
+
         return documentRepository
                 .findAll()
+                .stream()
+                .filter(document ->
+                        peutAccederDocument(
+                                document,
+                                utilisateurConnecte
+                        )
+                )
+                .map(DocumentMapper::toResponse)
+                .toList();
+    }
+
+    // =========================================================
+    // GET PAR DEMANDE
+    // =========================================================
+
+    @Override
+    public List<DocumentResponse> afficherParDemande(
+            Long demandeCreditId
+    ) {
+
+        DemandeCredit demande =
+                demandeRepository.findById(
+                        demandeCreditId
+                ).orElseThrow(() ->
+                        new RuntimeException(
+                                "Demande de crédit introuvable."
+                        )
+                );
+
+        // Vérification que le user connecté
+        // a le droit de voir cette demande
+        verifierAccesDemande(demande);
+
+        return documentRepository
+                .findByDemandeCreditId(
+                        demandeCreditId
+                )
                 .stream()
                 .map(DocumentMapper::toResponse)
                 .toList();
     }
 
+    // =========================================================
+    // DELETE
+    // =========================================================
 
-    // =========================================================
-    // DELETE DOCUMENT
-    // =========================================================
     @Override
     public void supprimer(Long id) {
 
-        Document document = documentRepository
-                .findById(id)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Document introuvable."
-                        )
-                );
+        Document document =
+                documentRepository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Document introuvable."
+                                )
+                        );
 
+        verifierAccesDocument(document);
 
-        // -----------------------------------------------------
-        // Supprimer aussi le fichier physique
-        // -----------------------------------------------------
         if (document.getCheminFichier() != null
                 && !document.getCheminFichier().isBlank()) {
 
             try {
 
-                Path baseDirectory = Paths
-                        .get(uploadDir)
-                        .toAbsolutePath()
-                        .normalize();
+                Path baseDirectory =
+                        Paths.get(uploadDir)
+                                .toAbsolutePath()
+                                .normalize();
 
-                Path path = baseDirectory
-                        .resolve(document.getCheminFichier())
-                        .normalize();
+                Path path =
+                        baseDirectory
+                                .resolve(
+                                        document.getCheminFichier()
+                                )
+                                .normalize();
 
-                if (path.startsWith(baseDirectory)) {
+                if (path.startsWith(
+                        baseDirectory
+                )) {
+
                     Files.deleteIfExists(path);
                 }
 
             } catch (IOException ignored) {
-                // Le fichier peut déjà ne plus exister.
+                // Fichier déjà absent
             }
         }
 
-
-        // -----------------------------------------------------
-        // Supprimer de la DB
-        // -----------------------------------------------------
-        documentRepository.delete(document);
+        documentRepository.delete(
+                document
+        );
     }
-
 
     // =========================================================
     // PREVIEW
     // =========================================================
+
     @Override
     public Resource preview(Long id) {
 
-        Document document = documentRepository
-                .findById(id)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Document introuvable."
-                        )
-                );
+        Document document =
+                documentRepository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Document introuvable."
+                                )
+                        );
+
+        verifierAccesDocument(document);
 
         return loadResource(document);
     }
 
-
     // =========================================================
     // DOWNLOAD
     // =========================================================
+
     @Override
     public Resource download(Long id) {
 
-        return preview(id);
+        Document document =
+                documentRepository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Document introuvable."
+                                )
+                        );
+
+        verifierAccesDocument(document);
+
+        return loadResource(document);
     }
 
+    // =========================================================
+    // VÉRIFICATION ACCÈS DEMANDE
+    // =========================================================
+
+    private void verifierAccesDemande(
+            DemandeCredit demande
+    ) {
+
+        Utilisateur utilisateur =
+                getUtilisateurConnecte();
+
+        // =====================================================
+        // ADMINISTRATEUR
+        // =====================================================
+
+        if (utilisateur instanceof Administrateur) {
+
+            return;
+        }
+
+        // =====================================================
+        // CLIENT
+        // =====================================================
+
+        if (utilisateur instanceof Client client) {
+
+            if (demande.getClient() == null
+                    || !demande.getClient()
+                    .getId()
+                    .equals(client.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit à cette demande."
+                );
+            }
+
+            return;
+        }
+
+        // =====================================================
+        // CONSEILLER
+        // =====================================================
+
+        if (utilisateur instanceof Conseiller conseiller) {
+
+            if (demande.getConseiller() == null
+                    || !demande.getConseiller()
+                    .getId()
+                    .equals(conseiller.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande "
+                                + "est affectée à un autre conseiller."
+                );
+            }
+
+            return;
+        }
+
+        // =====================================================
+        // RESPONSABLE CREDIT
+        // =====================================================
+
+        if (utilisateur instanceof ResponsableCredit responsable) {
+
+            if (demande.getResponsable() == null
+                    || !demande.getResponsable()
+                    .getId()
+                    .equals(responsable.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande "
+                                + "est affectée à un autre responsable."
+                );
+            }
+
+            return;
+        }
+
+        // =====================================================
+        // AUTRE ROLE
+        // =====================================================
+
+        throw new RuntimeException(
+                "Accès interdit."
+        );
+    }
 
     // =========================================================
-    // CHARGER LE FICHIER PHYSIQUE
+    // VÉRIFICATION ACCÈS DOCUMENT
     // =========================================================
-    private Resource loadResource(Document document) {
+
+    private void verifierAccesDocument(
+            Document document
+    ) {
+
+        if (document == null
+                || document.getDemandeCredit() == null) {
+
+            throw new RuntimeException(
+                    "Document invalide."
+            );
+        }
+
+        verifierAccesDemande(
+                document.getDemandeCredit()
+        );
+    }
+
+    // =========================================================
+    // FILTRAGE DOCUMENTS
+    // =========================================================
+
+    private boolean peutAccederDocument(
+            Document document,
+            Utilisateur utilisateur
+    ) {
+
+        if (document == null
+                || document.getDemandeCredit() == null) {
+
+            return false;
+        }
+
+        // =====================================================
+        // ADMINISTRATEUR
+        // =====================================================
+
+        if (utilisateur instanceof Administrateur) {
+
+            return true;
+        }
+
+        DemandeCredit demande =
+                document.getDemandeCredit();
+
+        // =====================================================
+        // CLIENT
+        // =====================================================
+
+        if (utilisateur instanceof Client client) {
+
+            return demande.getClient() != null
+                    && demande.getClient()
+                    .getId()
+                    .equals(client.getId());
+        }
+
+        // =====================================================
+        // CONSEILLER
+        // =====================================================
+
+        if (utilisateur instanceof Conseiller conseiller) {
+
+            return demande.getConseiller() != null
+                    && demande.getConseiller()
+                    .getId()
+                    .equals(conseiller.getId());
+        }
+
+        // =====================================================
+        // RESPONSABLE CREDIT
+        // =====================================================
+
+        if (utilisateur instanceof ResponsableCredit responsable) {
+
+            return demande.getResponsable() != null
+                    && demande.getResponsable()
+                    .getId()
+                    .equals(responsable.getId());
+        }
+
+        return false;
+    }
+
+    // =========================================================
+    // UTILISATEUR CONNECTÉ
+    // =========================================================
+
+    private Utilisateur getUtilisateurConnecte() {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication.getPrincipal() == null) {
+
+            throw new RuntimeException(
+                    "Utilisateur non authentifié."
+            );
+        }
+
+        String email =
+                authentication.getName();
+
+        return utilisateurRepository
+                .findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Utilisateur connecté introuvable."
+                        )
+                );
+    }
+
+    // =========================================================
+    // VALIDER DOCUMENT
+    // =========================================================
+
+    @Override
+    public void validerDocument(Long id) {
+
+        Document document =
+                documentRepository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Document introuvable."
+                                )
+                        );
+
+        verifierAccesDocument(document);
+
+        document.setStatutDocument(
+                StatutDocument.VALIDE
+        );
+
+        documentRepository.save(
+                document
+        );
+    }
+
+    // =========================================================
+    // REFUSER DOCUMENT
+    // =========================================================
+
+    @Override
+    public void refuserDocument(Long id) {
+
+        Document document =
+                documentRepository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Document introuvable."
+                                )
+                        );
+
+        verifierAccesDocument(document);
+
+        document.setStatutDocument(
+                StatutDocument.REFUSE
+        );
+
+        documentRepository.save(
+                document
+        );
+    }
+
+    // =========================================================
+    // CHARGER FICHIER
+    // =========================================================
+
+    private Resource loadResource(
+            Document document
+    ) {
 
         if (document.getCheminFichier() == null
                 || document.getCheminFichier().isBlank()) {
@@ -409,121 +697,66 @@ public class DocumentServiceImpl implements DocumentService {
             );
         }
 
-
         try {
 
-            // -------------------------------------------------
-            // Dossier principal
-            // -------------------------------------------------
-            Path baseDirectory = Paths
-                    .get(uploadDir)
-                    .toAbsolutePath()
-                    .normalize();
+            Path baseDirectory =
+                    Paths.get(uploadDir)
+                            .toAbsolutePath()
+                            .normalize();
 
-
-            // -------------------------------------------------
-            // Nettoyer les anciens chemins éventuels
-            //
-            // Exemple ancien :
-            // documents/client9/cin_yassine.pdf
-            //
-            // On retire "uploads/documents/" ou "./"
-            // si nécessaire.
-            // -------------------------------------------------
-            String chemin = document
-                    .getCheminFichier()
-                    .replace("\\", "/")
-                    .trim();
+            String chemin =
+                    document.getCheminFichier()
+                            .replace("\\", "/")
+                            .trim();
 
             while (chemin.startsWith("./")) {
-                chemin = chemin.substring(2);
+
+                chemin =
+                        chemin.substring(2);
             }
 
             while (chemin.startsWith("/")) {
-                chemin = chemin.substring(1);
+
+                chemin =
+                        chemin.substring(1);
             }
 
-            // Si ancien chemin contient "uploads/documents/"
-            if (chemin.startsWith("uploads/documents/")) {
+            if (chemin.startsWith(
+                    "uploads/documents/"
+            )) {
 
-                chemin = chemin.substring(
-                        "uploads/documents/".length()
-                );
+                chemin =
+                        chemin.substring(
+                                "uploads/documents/"
+                                        .length()
+                        );
             }
 
-            // Si ancien chemin commence par documents/
-            if (chemin.startsWith("documents/")) {
+            if (chemin.startsWith(
+                    "documents/"
+            )) {
 
-                chemin = chemin.substring(
-                        "documents/".length()
-                );
+                chemin =
+                        chemin.substring(
+                                "documents/"
+                                        .length()
+                        );
             }
 
+            Path path =
+                    baseDirectory
+                            .resolve(chemin)
+                            .normalize();
 
-            // -------------------------------------------------
-            // Construire chemin final
-            // -------------------------------------------------
-            Path path = baseDirectory
-                    .resolve(chemin)
-                    .normalize();
-
-
-            // -------------------------------------------------
-            // Sécurité
-            // -------------------------------------------------
-            if (!path.startsWith(baseDirectory)) {
+            if (!path.startsWith(
+                    baseDirectory
+            )) {
 
                 throw new RuntimeException(
                         "Chemin de fichier invalide."
                 );
             }
 
-
-            // -------------------------------------------------
-            // DEBUG
-            // -------------------------------------------------
-            System.out.println(
-                    "========================================"
-            );
-
-            System.out.println(
-                    "Upload directory : "
-                            + baseDirectory
-            );
-
-            System.out.println(
-                    "Chemin DB : "
-                            + document.getCheminFichier()
-            );
-
-            System.out.println(
-                    "Chemin nettoyé : "
-                            + chemin
-            );
-
-            System.out.println(
-                    "Fichier recherché : "
-                            + path.toAbsolutePath()
-            );
-
-            System.out.println(
-                    "Fichier existe : "
-                            + Files.exists(path)
-            );
-
-            System.out.println(
-                    "Fichier lisible : "
-                            + Files.isReadable(path)
-            );
-
-            System.out.println(
-                    "========================================"
-            );
-
-
-            // -------------------------------------------------
-            // Vérifier existence
-            // -------------------------------------------------
             if (!Files.exists(path)
                     || !Files.isReadable(path)) {
 
@@ -533,13 +766,10 @@ public class DocumentServiceImpl implements DocumentService {
                 );
             }
 
-
-            // -------------------------------------------------
-            // Créer Resource
-            // -------------------------------------------------
             Resource resource =
-                    new UrlResource(path.toUri());
-
+                    new UrlResource(
+                            path.toUri()
+                    );
 
             if (!resource.exists()
                     || !resource.isReadable()) {
@@ -549,7 +779,6 @@ public class DocumentServiceImpl implements DocumentService {
                                 + path.toAbsolutePath()
                 );
             }
-
 
             return resource;
 
@@ -562,13 +791,16 @@ public class DocumentServiceImpl implements DocumentService {
         }
     }
 
-
     // =========================================================
-    // GET EXTENSION
+    // EXTENSION
     // =========================================================
-    private String getExtension(String filename) {
 
-        int dotIndex = filename.lastIndexOf('.');
+    private String getExtension(
+            String filename
+    ) {
+
+        int dotIndex =
+                filename.lastIndexOf('.');
 
         if (dotIndex == -1
                 || dotIndex == filename.length() - 1) {
@@ -579,22 +811,29 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         return filename
-                .substring(dotIndex + 1)
+                .substring(
+                        dotIndex + 1
+                )
                 .toLowerCase();
     }
 
+    // =========================================================
+    // CONTENT TYPE
+    // =========================================================
 
-    // =========================================================
-    // DETECT CONTENT TYPE
-    // =========================================================
-    private String detectContentType(Path path) {
+    private String detectContentType(
+            Path path
+    ) {
 
         try {
 
             String detected =
-                    Files.probeContentType(path);
+                    Files.probeContentType(
+                            path
+                    );
 
             if (detected != null) {
+
                 return detected;
             }
 

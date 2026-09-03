@@ -31,9 +31,9 @@ public class WorkflowServiceImpl implements WorkflowService {
 
     static {
 
-        // ==============================
+        // =====================================================
         // BROUILLON
-        // ==============================
+        // =====================================================
 
         TRANSITIONS_VALIDES.put(
                 StatutDemande.BROUILLON,
@@ -42,9 +42,9 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
 
-        // ==============================
+        // =====================================================
         // SOUMISE
-        // ==============================
+        // =====================================================
 
         TRANSITIONS_VALIDES.put(
                 StatutDemande.SOUMISE,
@@ -54,9 +54,9 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
 
-        // ==============================
+        // =====================================================
         // EN_ANALYSE
-        // ==============================
+        // =====================================================
 
         TRANSITIONS_VALIDES.put(
                 StatutDemande.EN_ANALYSE,
@@ -66,9 +66,24 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
 
-        // ==============================
+        // =====================================================
+        // EN_ATTENTE
+        // =====================================================
+        // Le CONSEILLER peut commencer l'analyse.
+        // Le RESPONSABLE_CREDIT peut prendre la décision finale.
+
+        TRANSITIONS_VALIDES.put(
+                StatutDemande.EN_ATTENTE,
+                Set.of(
+                        StatutDemande.EN_ANALYSE,
+                        StatutDemande.APPROUVEE,
+                        StatutDemande.REFUSEE
+                )
+        );
+
+        // =====================================================
         // DOCUMENTS_MANQUANTS
-        // ==============================
+        // =====================================================
 
         TRANSITIONS_VALIDES.put(
                 StatutDemande.DOCUMENTS_MANQUANTS,
@@ -77,24 +92,9 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
 
-        // ==============================
-        // EN_ATTENTE
-        // ==============================
-        // Seul DIRECTEUR peut faire:
-        // EN_ATTENTE -> APPROUVEE
-        // EN_ATTENTE -> REFUSEE
-
-        TRANSITIONS_VALIDES.put(
-                StatutDemande.EN_ATTENTE,
-                Set.of(
-                        StatutDemande.APPROUVEE,
-                        StatutDemande.REFUSEE
-                )
-        );
-
-        // ==============================
+        // =====================================================
         // APPROUVEE
-        // ==============================
+        // =====================================================
 
         TRANSITIONS_VALIDES.put(
                 StatutDemande.APPROUVEE,
@@ -103,9 +103,9 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
 
-        // ==============================
+        // =====================================================
         // CONTRAT_SIGNE
-        // ==============================
+        // =====================================================
 
         TRANSITIONS_VALIDES.put(
                 StatutDemande.CONTRAT_SIGNE,
@@ -114,6 +114,10 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
     }
+
+    // ========================================================
+    // TRANSITION
+    // ========================================================
 
     @Override
     @Transactional
@@ -144,9 +148,9 @@ public class WorkflowServiceImpl implements WorkflowService {
                         Collections.emptySet()
                 );
 
-        // ============================================
-        // 1. Vérifier que la transition existe
-        // ============================================
+        // =====================================================
+        // 1. TRANSITION VALIDE
+        // =====================================================
 
         if (!transitionsPermises.contains(
                 nouveauStatut
@@ -160,9 +164,9 @@ public class WorkflowServiceImpl implements WorkflowService {
             );
         }
 
-        // ============================================
-        // 2. Vérifier l'utilisateur connecté
-        // ============================================
+        // =====================================================
+        // 2. UTILISATEUR CONNECTÉ
+        // =====================================================
 
         Utilisateur utilisateur =
                 utilisateurRepository
@@ -175,28 +179,30 @@ public class WorkflowServiceImpl implements WorkflowService {
                                 )
                         );
 
-        // ============================================
-        // 3. Règles métier par rôle
-        // ============================================
+        // =====================================================
+        // 3. AUTORISATIONS + AFFECTATION
+        // =====================================================
 
         verifierAutorisationTransition(
+                demande,
+                utilisateur,
                 statutActuel,
                 nouveauStatut,
                 roleUtilisateur
         );
 
-        // ============================================
-        // 4. Ancien statut
-        // ============================================
+        // =====================================================
+        // 4. ANCIEN STATUT
+        // =====================================================
 
         String ancienneValeur =
                 statutActuel != null
                         ? statutActuel.name()
                         : null;
 
-        // ============================================
-        // 5. Nouveau statut
-        // ============================================
+        // =====================================================
+        // 5. NOUVEAU STATUT
+        // =====================================================
 
         demande.setStatut(
                 nouveauStatut
@@ -206,9 +212,9 @@ public class WorkflowServiceImpl implements WorkflowService {
                 request.getCommentaire()
         );
 
-        // ============================================
-        // 6. Date analyse
-        // ============================================
+        // =====================================================
+        // 6. DATE ANALYSE
+        // =====================================================
 
         if (nouveauStatut ==
                 StatutDemande.EN_ANALYSE) {
@@ -218,9 +224,9 @@ public class WorkflowServiceImpl implements WorkflowService {
             );
         }
 
-        // ============================================
-        // 7. Date décision
-        // ============================================
+        // =====================================================
+        // 7. DATE DECISION
+        // =====================================================
 
         if (nouveauStatut ==
                 StatutDemande.APPROUVEE
@@ -240,17 +246,17 @@ public class WorkflowServiceImpl implements WorkflowService {
             }
         }
 
-        // ============================================
-        // 8. Sauvegarder demande
-        // ============================================
+        // =====================================================
+        // 8. SAUVEGARDE
+        // =====================================================
 
         demandeRepository.save(
                 demande
         );
 
-        // ============================================
-        // 9. Historique
-        // ============================================
+        // =====================================================
+        // 9. HISTORIQUE
+        // =====================================================
 
         Historique historique =
                 Historique.builder()
@@ -288,43 +294,48 @@ public class WorkflowServiceImpl implements WorkflowService {
     }
 
     // ========================================================
-    // REGLES D'AUTORISATION
+    // AUTORISATIONS
     // ========================================================
 
     private void verifierAutorisationTransition(
+            DemandeCredit demande,
+            Utilisateur utilisateur,
             StatutDemande statutActuel,
             StatutDemande nouveauStatut,
             String roleUtilisateur
     ) {
 
-        // ============================================
-        // EN_ATTENTE -> APPROUVEE / REFUSEE
-        // SEUL DIRECTEUR
-        // ============================================
+        // =====================================================
+        // CONSEILLER
+        // EN_ATTENTE -> EN_ANALYSE
+        // =====================================================
 
         if (statutActuel ==
                 StatutDemande.EN_ATTENTE
-                && (
-                nouveauStatut ==
-                        StatutDemande.APPROUVEE
-                        || nouveauStatut ==
-                        StatutDemande.REFUSEE
-        )) {
+                && nouveauStatut ==
+                StatutDemande.EN_ANALYSE) {
 
-            if (!"ROLE_DIRECTEUR".equals(
+            if (!"ROLE_CONSEILLER".equals(
                     roleUtilisateur
             )) {
 
                 throw new RuntimeException(
-                        "Seul le DIRECTEUR peut prendre la décision finale."
+                        "Seul le CONSEILLER peut commencer l'analyse."
                 );
             }
+
+            verifierConseillerAffecte(
+                    demande,
+                    utilisateur
+            );
+
+            return;
         }
 
-        // ============================================
-        // SOUMISE -> EN_ANALYSE
+        // =====================================================
         // CONSEILLER
-        // ============================================
+        // SOUMISE -> EN_ANALYSE
+        // =====================================================
 
         if (statutActuel ==
                 StatutDemande.SOUMISE
@@ -339,12 +350,19 @@ public class WorkflowServiceImpl implements WorkflowService {
                         "Seul le CONSEILLER peut commencer l'analyse."
                 );
             }
+
+            verifierConseillerAffecte(
+                    demande,
+                    utilisateur
+            );
+
+            return;
         }
 
-        // ============================================
-        // EN_ANALYSE -> DOCUMENTS_MANQUANTS
+        // =====================================================
         // CONSEILLER
-        // ============================================
+        // EN_ANALYSE -> DOCUMENTS_MANQUANTS
+        // =====================================================
 
         if (statutActuel ==
                 StatutDemande.EN_ANALYSE
@@ -359,12 +377,19 @@ public class WorkflowServiceImpl implements WorkflowService {
                         "Seul le CONSEILLER peut demander des documents manquants."
                 );
             }
+
+            verifierConseillerAffecte(
+                    demande,
+                    utilisateur
+            );
+
+            return;
         }
 
-        // ============================================
-        // EN_ANALYSE -> EN_ATTENTE
+        // =====================================================
         // CONSEILLER
-        // ============================================
+        // EN_ANALYSE -> EN_ATTENTE
+        // =====================================================
 
         if (statutActuel ==
                 StatutDemande.EN_ANALYSE
@@ -379,46 +404,151 @@ public class WorkflowServiceImpl implements WorkflowService {
                         "Seul le CONSEILLER peut terminer l'analyse."
                 );
             }
+
+            verifierConseillerAffecte(
+                    demande,
+                    utilisateur
+            );
+
+            return;
         }
 
-        // ============================================
+        // =====================================================
+        // RESPONSABLE CREDIT
+        // EN_ATTENTE -> APPROUVEE
+        // EN_ATTENTE -> REFUSEE
+        // =====================================================
+
+        if (statutActuel ==
+                StatutDemande.EN_ATTENTE
+                && (
+                nouveauStatut ==
+                        StatutDemande.APPROUVEE
+                        || nouveauStatut ==
+                        StatutDemande.REFUSEE
+        )) {
+
+            if (!"ROLE_RESPONSABLE_CREDIT".equals(
+                    roleUtilisateur
+            )) {
+
+                throw new RuntimeException(
+                        "Seul le RESPONSABLE CREDIT peut prendre la décision finale."
+                );
+            }
+
+            verifierResponsableAffecte(
+                    demande,
+                    utilisateur
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // RESPONSABLE CREDIT
         // APPROUVEE -> CONTRAT_SIGNE
-        // DIRECTEUR
-        // ============================================
+        // =====================================================
 
         if (statutActuel ==
                 StatutDemande.APPROUVEE
                 && nouveauStatut ==
                 StatutDemande.CONTRAT_SIGNE) {
 
-            if (!"ROLE_DIRECTEUR".equals(
+            if (!"ROLE_RESPONSABLE_CREDIT".equals(
                     roleUtilisateur
             )) {
 
                 throw new RuntimeException(
-                        "Seul le DIRECTEUR peut faire avancer la demande vers le contrat."
+                        "Seul le RESPONSABLE CREDIT peut faire avancer la demande vers le contrat."
                 );
             }
+
+            verifierResponsableAffecte(
+                    demande,
+                    utilisateur
+            );
+
+            return;
         }
 
-        // ============================================
+        // =====================================================
+        // RESPONSABLE CREDIT
         // CONTRAT_SIGNE -> CLOTUREE
-        // DIRECTEUR
-        // ============================================
+        // =====================================================
 
         if (statutActuel ==
                 StatutDemande.CONTRAT_SIGNE
                 && nouveauStatut ==
                 StatutDemande.CLOTUREE) {
 
-            if (!"ROLE_DIRECTEUR".equals(
+            if (!"ROLE_RESPONSABLE_CREDIT".equals(
                     roleUtilisateur
             )) {
 
                 throw new RuntimeException(
-                        "Seul le DIRECTEUR peut clôturer la demande."
+                        "Seul le RESPONSABLE CREDIT peut clôturer la demande."
                 );
             }
+
+            verifierResponsableAffecte(
+                    demande,
+                    utilisateur
+            );
+        }
+    }
+
+    // ========================================================
+    // VÉRIFIER CONSEILLER AFFECTÉ
+    // ========================================================
+
+    private void verifierConseillerAffecte(
+            DemandeCredit demande,
+            Utilisateur utilisateur
+    ) {
+
+        if (demande.getConseiller() == null) {
+
+            throw new RuntimeException(
+                    "Cette demande n'est affectée à aucun Conseiller."
+            );
+        }
+
+        if (!Objects.equals(
+                demande.getConseiller().getId(),
+                utilisateur.getId()
+        )) {
+
+            throw new RuntimeException(
+                    "Accès interdit : cette demande est affectée à un autre Conseiller."
+            );
+        }
+    }
+
+    // ========================================================
+    // VÉRIFIER RESPONSABLE AFFECTÉ
+    // ========================================================
+
+    private void verifierResponsableAffecte(
+            DemandeCredit demande,
+            Utilisateur utilisateur
+    ) {
+
+        if (demande.getResponsable() == null) {
+
+            throw new RuntimeException(
+                    "Cette demande n'est affectée à aucun Responsable Crédit."
+            );
+        }
+
+        if (!Objects.equals(
+                demande.getResponsable().getId(),
+                utilisateur.getId()
+        )) {
+
+            throw new RuntimeException(
+                    "Accès interdit : cette demande est affectée à un autre Responsable Crédit."
+            );
         }
     }
 
@@ -467,10 +597,6 @@ public class WorkflowServiceImpl implements WorkflowService {
         List<SuiviDemandeResponse.EtapeSuivi> etapes =
                 new ArrayList<>();
 
-        // ============================================
-        // SOUMISE
-        // ============================================
-
         etapes.add(
                 buildEtape(
                         "Soumise",
@@ -489,10 +615,6 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
 
-        // ============================================
-        // ANALYSE
-        // ============================================
-
         etapes.add(
                 buildEtape(
                         "Analyse",
@@ -506,10 +628,6 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
 
-        // ============================================
-        // SCORE
-        // ============================================
-
         etapes.add(
                 buildEtape(
                         "Score calculé",
@@ -522,10 +640,6 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
 
-        // ============================================
-        // DECISION
-        // ============================================
-
         etapes.add(
                 buildEtape(
                         "Décision",
@@ -537,10 +651,6 @@ public class WorkflowServiceImpl implements WorkflowService {
                 )
         );
 
-        // ============================================
-        // CONTRAT
-        // ============================================
-
         etapes.add(
                 buildEtape(
                         "Contrat signé",
@@ -549,10 +659,6 @@ public class WorkflowServiceImpl implements WorkflowService {
                         null
                 )
         );
-
-        // ============================================
-        // CLOTURE
-        // ============================================
 
         etapes.add(
                 buildEtape(
@@ -582,20 +688,14 @@ public class WorkflowServiceImpl implements WorkflowService {
     ) {
 
         return SuiviDemandeResponse.EtapeSuivi.builder()
-                .etape(
-                        nom
-                )
+                .etape(nom)
                 .statut(
                         complete
                                 ? "COMPLETE"
                                 : "EN_ATTENTE"
                 )
-                .date(
-                        date
-                )
-                .complete(
-                        complete
-                )
+                .date(date)
+                .complete(complete)
                 .build();
     }
 }

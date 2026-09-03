@@ -5,6 +5,7 @@ import com.creditscoring.service.ResponsableRisqueService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,25 +20,27 @@ public class ResponsableRisqueController {
 
     @GetMapping("/dossiers-a-risque")
     @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
-    public ResponseEntity<
-            List<ResponsableRisqueResponse>
-            > dossiersARisque() {
+    public ResponseEntity<List<ResponsableRisqueResponse>> dossiersARisque(
+            Authentication authentication
+    ) {
 
         return ResponseEntity.ok(
-                responsableRisqueService
-                        .getDossiersARisque()
+                responsableRisqueService.getDossiersARisque(
+                        authentication.getName()
+                )
         );
     }
 
     @GetMapping("/dossiers/priorites")
     @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
-    public ResponseEntity<
-            List<ResponsableRisqueResponse>
-            > dossiersPrioritaires() {
+    public ResponseEntity<List<ResponsableRisqueResponse>> dossiersPrioritaires(
+            Authentication authentication
+    ) {
 
         return ResponseEntity.ok(
-                responsableRisqueService
-                        .getDossiersPrioritaires()
+                responsableRisqueService.getDossiersPrioritaires(
+                        authentication.getName()
+                )
         );
     }
 }

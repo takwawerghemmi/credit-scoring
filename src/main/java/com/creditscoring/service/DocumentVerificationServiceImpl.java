@@ -1,11 +1,17 @@
 package com.creditscoring.service;
 
 import com.creditscoring.dto.reponse.DocumentVerificationResponse;
+import com.creditscoring.entity.Client;
+import com.creditscoring.entity.Conseiller;
+import com.creditscoring.entity.DemandeCredit;
 import com.creditscoring.entity.Document;
+import com.creditscoring.entity.ResponsableCredit;
+import com.creditscoring.entity.Utilisateur;
 import com.creditscoring.enums.StatutDocument;
 import com.creditscoring.enums.TypeDocument;
-import com.creditscoring.repository.DocumentRepository;
 import com.creditscoring.repository.DemandeCreditRepository;
+import com.creditscoring.repository.DocumentRepository;
+import com.creditscoring.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,25 +25,56 @@ public class DocumentVerificationServiceImpl
 
     private final DocumentRepository documentRepository;
     private final DemandeCreditRepository demandeCreditRepository;
+    private final UtilisateurRepository utilisateurRepository;
+
+    // =====================================================
+    // VERIFICATION DES DOCUMENTS
+    // =====================================================
 
     @Override
     public DocumentVerificationResponse verifierDocuments(
-            Long demandeId
+            Long demandeId,
+            String emailUtilisateur
     ) {
 
-        // =====================================================
-        // 1. Vérifier que la demande existe
-        // =====================================================
+        // =================================================
+        // 1. Récupérer la demande
+        // =================================================
 
-        if (!demandeCreditRepository.existsById(demandeId)) {
-            throw new RuntimeException(
-                    "Demande de crédit introuvable."
-            );
-        }
+        DemandeCredit demande =
+                demandeCreditRepository
+                        .findById(demandeId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Demande de crédit introuvable."
+                                )
+                        );
 
-        // =====================================================
-        // 2. Récupérer les documents de la demande
-        // =====================================================
+        // =================================================
+        // 2. Récupérer utilisateur connecté
+        // =================================================
+
+        Utilisateur utilisateur =
+                utilisateurRepository
+                        .findByEmail(emailUtilisateur)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Utilisateur connecté introuvable."
+                                )
+                        );
+
+        // =================================================
+        // 3. Vérifier accès à la demande
+        // =================================================
+
+        verifierAccesDemande(
+                demande,
+                utilisateur
+        );
+
+        // =================================================
+        // 4. Récupérer documents
+        // =================================================
 
         List<Document> documents =
                 documentRepository.findAll()
@@ -45,21 +82,24 @@ public class DocumentVerificationServiceImpl
                         .filter(document ->
                                 document.getDemandeCredit() != null
                                         && demandeId.equals(
-                                        document.getDemandeCredit().getId()
+                                        document
+                                                .getDemandeCredit()
+                                                .getId()
                                 )
                         )
                         .toList();
 
-        // =====================================================
-        // 3. Types obligatoires
-        // =====================================================
+        // =================================================
+        // 5. Types obligatoires
+        // =================================================
 
         List<TypeDocument> typesObligatoires =
                 List.of(
                         TypeDocument.CIN,
                         TypeDocument.BULLETIN_SALAIRE,
+                        TypeDocument.ATTESTATION_TRAVAIL,
                         TypeDocument.RELEVE_BANCAIRE,
-                        TypeDocument.ATTESTATION_TRAVAIL
+                        TypeDocument.CONTRAT_TRAVAIL
                 );
 
         List<DocumentVerificationResponse.DocumentStatus>
@@ -68,9 +108,9 @@ public class DocumentVerificationServiceImpl
 
         boolean complet = true;
 
-        // =====================================================
-        // 4. Vérifier chaque document obligatoire
-        // =====================================================
+        // =================================================
+        // 6. Vérification
+        // =================================================
 
         for (TypeDocument type :
                 typesObligatoires) {
@@ -150,9 +190,9 @@ public class DocumentVerificationServiceImpl
             );
         }
 
-        // =====================================================
-        // 5. Retour
-        // =====================================================
+        // =================================================
+        // 7. Retour
+        // =================================================
 
         return DocumentVerificationResponse.builder()
                 .demandeId(demandeId)
@@ -161,13 +201,86 @@ public class DocumentVerificationServiceImpl
                 .build();
     }
 
+    // =====================================================
+    // DOSSIER COMPLET
+    // =====================================================
+
     @Override
     public boolean isComplet(
-            Long demandeId
+            Long demandeId,
+            String emailUtilisateur
     ) {
 
         return verifierDocuments(
-                demandeId
+                demandeId,
+                emailUtilisateur
         ).isComplet();
+    }
+
+    // =====================================================
+    // VERIFICATION ACCES
+    // =====================================================
+
+    private void verifierAccesDemande(
+            DemandeCredit demande,
+            Utilisateur utilisateur
+    ) {
+
+        // -------------------------------------------------
+        // CONSEILLER
+        // -------------------------------------------------
+
+        if (utilisateur instanceof Conseiller conseiller) {
+
+            if (demande.getConseiller() == null
+                    || !demande.getConseiller()
+                    .getId()
+                    .equals(conseiller.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande "
+                                + "est affectée à un autre conseiller."
+                );
+            }
+
+            return;
+        }
+
+        // -------------------------------------------------
+        // RESPONSABLE
+        // -------------------------------------------------
+
+        if (utilisateur instanceof ResponsableCredit responsable) {
+
+            if (demande.getResponsable() == null
+                    || !demande.getResponsable()
+                    .getId()
+                    .equals(responsable.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande "
+                                + "est affectée à un autre responsable."
+                );
+            }
+
+            return;
+        }
+
+        // -------------------------------------------------
+        // CLIENT
+        // -------------------------------------------------
+
+        if (utilisateur instanceof Client) {
+
+            throw new RuntimeException(
+                    "Accès interdit : la vérification "
+                            + "des documents est réservée "
+                            + "au personnel de crédit."
+            );
+        }
+
+        throw new RuntimeException(
+                "Accès interdit."
+        );
     }
 }

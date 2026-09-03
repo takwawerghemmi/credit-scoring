@@ -9,4 +9,10 @@ public interface GarantieRepository
         extends JpaRepository<Garantie, Long> {
 
     List<Garantie> findByDemandeCreditId(Long demandeCreditId);
+
+    List<Garantie> findByDemandeCreditConseillerId(Long conseillerId);
+
+    List<Garantie> findByDemandeCreditResponsableId(Long responsableId);
+
+    List<Garantie> findByDemandeCreditClientId(Long clientId);
 }

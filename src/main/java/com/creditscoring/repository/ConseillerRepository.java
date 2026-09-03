@@ -13,4 +13,5 @@ public interface ConseillerRepository extends JpaRepository<Conseiller, Long> {
 
     boolean existsByMatricule(String matricule);
 
+    Optional<Conseiller> findByEmail(String email);
 }

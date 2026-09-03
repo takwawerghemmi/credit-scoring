@@ -98,7 +98,7 @@ public class SignatureServiceImpl
         }
 
         // =====================================================
-        // NOTIFICATION DIRECTEUR
+        // NOTIFICATION RESPONSABLE CRÉDIT
         // =====================================================
 
         if (contrat.getUtilisateur() != null) {

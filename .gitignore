@@ -57,3 +57,8 @@ reports/
 
 # Runtime uploads
 uploads/
+
+# Local files
+cp.txt
+*.whl
+*.code-workspace

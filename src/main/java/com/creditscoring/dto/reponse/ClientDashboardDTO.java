@@ -1,6 +1,5 @@
 package com.creditscoring.dto.reponse;
 
-import com.creditscoring.entity.DemandeCredit;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,7 +32,6 @@ public class ClientDashboardDTO {
 
     private Long unreadNotifications;
 
-    private List<DemandeCredit> recentApplications;
-
+    private List<ClientRecentDemandeDTO> recentApplications;
     private Map<String, Long> applicationStatusDistribution;
 }

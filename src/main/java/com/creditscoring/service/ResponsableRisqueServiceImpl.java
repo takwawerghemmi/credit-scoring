@@ -3,8 +3,11 @@ package com.creditscoring.service;
 import com.creditscoring.dto.reponse.ResponsableRisqueResponse;
 import com.creditscoring.entity.CreditScore;
 import com.creditscoring.entity.DemandeCredit;
+import com.creditscoring.entity.ResponsableCredit;
+import com.creditscoring.entity.Utilisateur;
 import com.creditscoring.repository.CreditScoreRepository;
 import com.creditscoring.repository.DemandeCreditRepository;
+import com.creditscoring.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +24,27 @@ public class ResponsableRisqueServiceImpl
 
     private final DemandeCreditRepository demandeCreditRepository;
     private final CreditScoreRepository creditScoreRepository;
+    private final UtilisateurRepository utilisateurRepository;
+
+    // =========================================================
+    // DOSSIERS A RISQUE
+    // =========================================================
 
     @Override
-    public List<ResponsableRisqueResponse> getDossiersARisque() {
+    public List<ResponsableRisqueResponse> getDossiersARisque(
+            String emailUtilisateur
+    ) {
 
+        ResponsableCredit responsable =
+                getResponsableConnecte(emailUtilisateur);
+
+        // IMPORTANT :
+        // seulement les demandes affectées
+        // au Responsable connecté
         List<DemandeCredit> demandes =
-                demandeCreditRepository.findAll();
+                demandeCreditRepository.findByResponsableId(
+                        responsable.getId()
+                );
 
         Map<Long, CreditScore> scores =
                 getLatestScores(
@@ -58,11 +76,25 @@ public class ResponsableRisqueServiceImpl
                 .toList();
     }
 
-    @Override
-    public List<ResponsableRisqueResponse> getDossiersPrioritaires() {
+    // =========================================================
+    // DOSSIERS PRIORITAIRES
+    // =========================================================
 
+    @Override
+    public List<ResponsableRisqueResponse> getDossiersPrioritaires(
+            String emailUtilisateur
+    ) {
+
+        ResponsableCredit responsable =
+                getResponsableConnecte(emailUtilisateur);
+
+        // IMPORTANT :
+        // seulement les demandes affectées
+        // au Responsable connecté
         List<DemandeCredit> demandes =
-                demandeCreditRepository.findAll();
+                demandeCreditRepository.findByResponsableId(
+                        responsable.getId()
+                );
 
         Map<Long, CreditScore> scores =
                 getLatestScores(
@@ -122,6 +154,36 @@ public class ResponsableRisqueServiceImpl
         return ranked;
     }
 
+    // =========================================================
+    // RESPONSABLE CONNECTÉ
+    // =========================================================
+
+    private ResponsableCredit getResponsableConnecte(
+            String email
+    ) {
+
+        Utilisateur utilisateur =
+                utilisateurRepository.findByEmail(email)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Utilisateur connecté introuvable."
+                                )
+                        );
+
+        if (!(utilisateur instanceof ResponsableCredit responsable)) {
+
+            throw new RuntimeException(
+                    "Accès réservé au Responsable Crédit."
+            );
+        }
+
+        return responsable;
+    }
+
+    // =========================================================
+    // DERNIER SCORE
+    // =========================================================
+
     private Map<Long, CreditScore> getLatestScores(
             List<CreditScore> scores
     ) {
@@ -134,7 +196,8 @@ public class ResponsableRisqueServiceImpl
                 .collect(
                         Collectors.toMap(
                                 score ->
-                                        score.getDemandeCredit().getId(),
+                                        score.getDemandeCredit()
+                                                .getId(),
                                 Function.identity(),
                                 (s1, s2) -> {
 
@@ -156,6 +219,10 @@ public class ResponsableRisqueServiceImpl
                         )
                 );
     }
+
+    // =========================================================
+    // BUILD RESPONSE
+    // =========================================================
 
     private ResponsableRisqueResponse buildResponse(
             DemandeCredit demande,
@@ -202,11 +269,20 @@ public class ResponsableRisqueServiceImpl
                 )
                 .score(scoreValue)
                 .niveauRisque(niveauRisque)
-                .priorite(calculerPriorite(niveauRisque, scoreValue))
+                .priorite(
+                        calculerPriorite(
+                                niveauRisque,
+                                scoreValue
+                        )
+                )
                 .rangPriorite(rang)
                 .dateDemande(demande.getDateDemande())
                 .build();
     }
+
+    // =========================================================
+    // DOSSIER A RISQUE
+    // =========================================================
 
     private boolean isDossierARisque(
             ResponsableRisqueResponse dossier
@@ -223,6 +299,10 @@ public class ResponsableRisqueServiceImpl
                 || risque.equals("ELEVE")
                 || risque.equals("TRES_ELEVE");
     }
+
+    // =========================================================
+    // POIDS RISQUE
+    // =========================================================
 
     private int riskWeight(
             ResponsableRisqueResponse dossier
@@ -244,6 +324,10 @@ public class ResponsableRisqueServiceImpl
             default -> 0;
         };
     }
+
+    // =========================================================
+    // PRIORITÉ
+    // =========================================================
 
     private int priorityWeight(
             ResponsableRisqueResponse dossier
@@ -299,6 +383,10 @@ public class ResponsableRisqueServiceImpl
 
         return weight;
     }
+
+    // =========================================================
+    // CALCUL PRIORITÉ
+    // =========================================================
 
     private String calculerPriorite(
             String niveauRisque,

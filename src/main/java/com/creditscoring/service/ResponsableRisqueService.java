@@ -6,7 +6,11 @@ import java.util.List;
 
 public interface ResponsableRisqueService {
 
-    List<ResponsableRisqueResponse> getDossiersARisque();
+    List<ResponsableRisqueResponse> getDossiersARisque(
+            String emailUtilisateur
+    );
 
-    List<ResponsableRisqueResponse> getDossiersPrioritaires();
+    List<ResponsableRisqueResponse> getDossiersPrioritaires(
+            String emailUtilisateur
+    );
 }

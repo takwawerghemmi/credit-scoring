@@ -1,9 +1,10 @@
 package com.creditscoring;
 
+import com.creditscoring.entity.Administrateur;
 import com.creditscoring.entity.Role;
-import com.creditscoring.entity.Utilisateur;
 import com.creditscoring.repository.RoleRepository;
 import com.creditscoring.repository.UtilisateurRepository;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -12,32 +13,38 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+@SpringBootApplication
 @EnableCaching
 @EnableScheduling
-@SpringBootApplication
 public class CreditScoringSystemApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(CreditScoringSystemApplication.class, args);
+
+        SpringApplication.run(
+                CreditScoringSystemApplication.class,
+                args
+        );
     }
 
     @Bean
     CommandLineRunner initDatabase(
             RoleRepository roleRepository,
             UtilisateurRepository utilisateurRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder
+    ) {
 
         return args -> {
 
-            // ==========================
-            // CREATION DES ROLES
-            // ==========================
+            // =====================================================
+            // 1. CRÉATION DES RÔLES
+            // =====================================================
 
-            Role adminRole = createRoleIfNotExists(
-                    roleRepository,
-                    "ADMIN",
-                    "Administrateur du système"
-            );
+            Role adminRole =
+                    createRoleIfNotExists(
+                            roleRepository,
+                            "ADMIN",
+                            "Administrateur du système"
+                    );
 
             createRoleIfNotExists(
                     roleRepository,
@@ -53,63 +60,128 @@ public class CreditScoringSystemApplication {
 
             createRoleIfNotExists(
                     roleRepository,
-                    "DIRECTEUR",
-                    "Directeur d'agence"
-            );
-
-            createRoleIfNotExists(
-                    roleRepository,
                     "RESPONSABLE_CREDIT",
                     "Responsable Crédit"
             );
 
-            // ==========================
-            // CREATION DU PREMIER ADMIN
-            // ==========================
+            // =====================================================
+            // 2. SUPER ADMIN
+            // =====================================================
+
+            String superAdminEmail =
+                    "takwabouabid149@gmail.com";
+
+            String superAdminPassword =
+                    "TAkwa123";
 
             if (utilisateurRepository
-                    .findByEmail("takwabouabid149@gmail.com")
+                    .findByEmail(superAdminEmail)
                     .isEmpty()) {
 
-                Utilisateur admin = Utilisateur.builder()
-                        .nom("Takwa")
-                        .prenom("Admin")
-                        .email("takwabouabid149@gmail.com")
-                        .motDePasse(passwordEncoder.encode("admin123"))
-                        .actif(true)
-                        .role(adminRole)
-                        .build();
+                Administrateur admin =
+                        Administrateur.builder()
+                                .nom("Bouabid")
+                                .prenom("Takwa")
+                                .email(superAdminEmail)
+                                .motDePasse(
+                                        passwordEncoder.encode(
+                                                superAdminPassword
+                                        )
+                                )
+                                .actif(true)
+                                .role(adminRole)
+                                .matricule("ADM-001")
+                                .departement("Administration")
+                                .build();
 
-                utilisateurRepository.save(admin);
+                utilisateurRepository.save(
+                        admin
+                );
 
-                System.out.println("========================================");
-                System.out.println("ADMIN CREE AVEC SUCCES");
-                System.out.println("Email : takwabouabid149@gmail.com");
-                System.out.println("Mot de passe : admin123");
-                System.out.println("========================================");
+                System.out.println();
+                System.out.println(
+                        "=============================================="
+                );
+                System.out.println(
+                        "       SUPER ADMIN CRÉÉ"
+                );
+                System.out.println(
+                        "=============================================="
+                );
+                System.out.println(
+                        "Email    : "
+                                + superAdminEmail
+                );
+                System.out.println(
+                        "Password : "
+                                + superAdminPassword
+                );
+                System.out.println(
+                        "Role     : ADMIN"
+                );
+                System.out.println(
+                        "=============================================="
+                );
+
             } else {
 
-                System.out.println("L'administrateur existe déjà.");
+                System.out.println();
+                System.out.println(
+                        "=============================================="
+                );
+                System.out.println(
+                        "       SUPER ADMIN DÉJÀ EXISTANT"
+                );
+                System.out.println(
+                        "=============================================="
+                );
+                System.out.println(
+                        "Email : "
+                                + superAdminEmail
+                );
+                System.out.println(
+                        "Role  : ADMIN"
+                );
+                System.out.println(
+                        "=============================================="
+                );
             }
-
         };
     }
+
+    // =====================================================
+    // CRÉER ROLE SI ABSENT
+    // =====================================================
 
     private Role createRoleIfNotExists(
             RoleRepository repository,
             String nom,
-            String description) {
+            String description
+    ) {
 
-        return repository.findByNom(nom)
+        return repository
+                .findByNom(nom)
                 .orElseGet(() -> {
 
-                    Role role = new Role();
-                    role.setNom(nom);
-                    role.setDescription(description);
+                    Role role =
+                            new Role();
 
-                    System.out.println("Role créé : " + nom);
+                    role.setNom(
+                            nom
+                    );
 
-                    return repository.save(role);
+                    role.setDescription(
+                            description
+                    );
+
+                    System.out.println(
+                            "Role créé : "
+                                    + nom
+                    );
+
+                    return repository.save(
+                            role
+                    );
                 });
     }
 }

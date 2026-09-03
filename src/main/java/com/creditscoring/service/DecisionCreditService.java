@@ -8,6 +8,6 @@ public interface DecisionCreditService {
     DecisionResponse prendreDecision(
             DecisionRequest request,
             String role,
-            String emailDirecteur
+            String emailResponsable
     );
 }

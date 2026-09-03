@@ -15,33 +15,52 @@ import org.springframework.web.bind.annotation.*;
 public class EmployeController {
 
     private final EmployeService employeService;
+
+    // =====================================================
+    // CREER ADMINISTRATEUR
+    // =====================================================
+
     @PostMapping("/admin")
     public ResponseEntity<UtilisateurResponse> creerAdmin(
-            @Valid @RequestBody CreateEmployeRequest request){
+            @Valid @RequestBody CreateEmployeRequest request
+    ) {
 
         return ResponseEntity.ok(
-                employeService.creerAdministrateur(request));
+                employeService.creerAdministrateur(
+                        request
+                )
+        );
     }
+
+    // =====================================================
+    // CREER CONSEILLER
+    // =====================================================
+
     @PostMapping("/conseiller")
     public ResponseEntity<UtilisateurResponse> creerConseiller(
-            @Valid @RequestBody CreateEmployeRequest request){
+            @Valid @RequestBody CreateEmployeRequest request
+    ) {
 
         return ResponseEntity.ok(
-                employeService.creerConseiller(request));
+                employeService.creerConseiller(
+                        request
+                )
+        );
     }
-    @PostMapping("/directeur")
-    public ResponseEntity<UtilisateurResponse> creerDirecteur(
-            @Valid @RequestBody CreateEmployeRequest request){
 
-        return ResponseEntity.ok(
-                employeService.creerDirecteur(request));
-    }
+    // =====================================================
+    // CREER RESPONSABLE CREDIT
+    // =====================================================
+
     @PostMapping("/responsable-credit")
     public ResponseEntity<UtilisateurResponse> creerResponsableCredit(
-            @Valid @RequestBody CreateEmployeRequest request){
+            @Valid @RequestBody CreateEmployeRequest request
+    ) {
 
         return ResponseEntity.ok(
-                employeService.creerResponsableCredit(request));
+                employeService.creerResponsableCredit(
+                        request
+                )
+        );
     }
-
 }

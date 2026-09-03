@@ -4,7 +4,10 @@ import com.creditscoring.dto.reponse.ResponsableDashboardResponse;
 
 public interface ResponsableDashboardService {
 
-    ResponsableDashboardResponse getDashboard();
+    ResponsableDashboardResponse getDashboard(String email);
 
-    ResponsableDashboardResponse.DossierResponsable getDossier(Long demandeId);
+    ResponsableDashboardResponse.DossierResponsable getDossier(
+            Long demandeId,
+            String email
+    );
 }

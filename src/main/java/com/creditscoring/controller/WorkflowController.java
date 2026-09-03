@@ -19,7 +19,14 @@ public class WorkflowController {
 
     private final WorkflowService workflowService;
 
-    @PreAuthorize("hasAnyRole('CONSEILLER', 'RESPONSABLE_CREDIT', 'DIRECTEUR')")
+    // =====================================================
+    // TRANSITION
+    // CONSEILLER + RESPONSABLE CRÉDIT
+    // =====================================================
+
+    @PreAuthorize(
+            "hasAnyRole('CONSEILLER', 'RESPONSABLE_CREDIT')"
+    )
     @PutMapping("/demandes/{demandeId}/transition")
     public ResponseEntity<String> transitionner(
             @PathVariable Long demandeId,
@@ -50,25 +57,41 @@ public class WorkflowController {
         );
     }
 
-    @PreAuthorize("hasAnyRole('CLIENT', 'CONSEILLER', 'RESPONSABLE_CREDIT', 'DIRECTEUR')")
+    // =====================================================
+    // STATUT
+    // =====================================================
+
+    @PreAuthorize(
+            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE_CREDIT')"
+    )
     @GetMapping("/demandes/{demandeId}/statut")
     public ResponseEntity<StatutDemande> getStatut(
             @PathVariable Long demandeId
     ) {
 
         return ResponseEntity.ok(
-                workflowService.getStatutActuel(demandeId)
+                workflowService.getStatutActuel(
+                        demandeId
+                )
         );
     }
 
-    @PreAuthorize("hasAnyRole('CLIENT', 'CONSEILLER', 'RESPONSABLE_CREDIT', 'DIRECTEUR')")
+    // =====================================================
+    // SUIVI
+    // =====================================================
+
+    @PreAuthorize(
+            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE_CREDIT')"
+    )
     @GetMapping("/demandes/{demandeId}/suivi")
     public ResponseEntity<SuiviDemandeResponse> getSuivi(
             @PathVariable Long demandeId
     ) {
 
         return ResponseEntity.ok(
-                workflowService.getSuivi(demandeId)
+                workflowService.getSuivi(
+                        demandeId
+                )
         );
     }
 }

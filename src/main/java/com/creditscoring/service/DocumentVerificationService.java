@@ -4,7 +4,13 @@ import com.creditscoring.dto.reponse.DocumentVerificationResponse;
 
 public interface DocumentVerificationService {
 
-    DocumentVerificationResponse verifierDocuments(Long demandeId);
+    DocumentVerificationResponse verifierDocuments(
+            Long demandeId,
+            String emailUtilisateur
+    );
 
-    boolean isComplet(Long demandeId);
+    boolean isComplet(
+            Long demandeId,
+            String emailUtilisateur
+    );
 }

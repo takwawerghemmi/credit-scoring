@@ -7,6 +7,7 @@ import com.creditscoring.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -14,30 +15,46 @@ public class EmployeServiceImpl implements EmployeService {
 
     private final AdministrateurRepository administrateurRepository;
     private final ConseillerRepository conseillerRepository;
-    private final DirecteurRepository directeurRepository;
     private final ResponsableCreditRepository responsableCreditRepository;
     private final RoleRepository roleRepository;
+    private final BanqueRepository banqueRepository;
+    private final AgenceRepository agenceRepository;
     private final PasswordEncoder passwordEncoder;
 
-
+    // =========================================================
+    // CREER ADMINISTRATEUR
+    // =========================================================
 
     @Override
-    public UtilisateurResponse creerAdministrateur(CreateEmployeRequest request) {
+    @Transactional
+    public UtilisateurResponse creerAdministrateur(
+            CreateEmployeRequest request
+    ) {
 
-        Role role = roleRepository.findByNom("ADMIN")
-                .orElseThrow(() -> new RuntimeException("Role ADMIN introuvable"));
+        Role role =
+                roleRepository.findByNom("ADMIN")
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Role ADMIN introuvable"
+                                )
+                        );
 
-        Administrateur admin = Administrateur.builder()
-                .nom(request.getNom())
-                .prenom(request.getPrenom())
-                .email(request.getEmail())
-                .motDePasse(passwordEncoder.encode(request.getMotDePasse()))
-                .telephone(request.getTelephone())
-                .adresse(request.getAdresse())
-                .matricule(request.getMatricule())
-                .departement("Administration")
-                .role(role)
-                .build();
+        Administrateur admin =
+                Administrateur.builder()
+                        .nom(request.getNom())
+                        .prenom(request.getPrenom())
+                        .email(request.getEmail())
+                        .motDePasse(
+                                passwordEncoder.encode(
+                                        request.getMotDePasse()
+                                )
+                        )
+                        .telephone(request.getTelephone())
+                        .adresse(request.getAdresse())
+                        .matricule(request.getMatricule())
+                        .departement("Administration")
+                        .role(role)
+                        .build();
 
         administrateurRepository.save(admin);
 
@@ -52,25 +69,109 @@ public class EmployeServiceImpl implements EmployeService {
                 .role(role.getNom())
                 .build();
     }
+
+    // =========================================================
+    // CREER CONSEILLER
+    // =========================================================
+
     @Override
-    public UtilisateurResponse creerConseiller(CreateEmployeRequest request) {
+    @Transactional
+    public UtilisateurResponse creerConseiller(
+            CreateEmployeRequest request
+    ) {
 
-        Role role = roleRepository.findByNom("CONSEILLER")
-                .orElseThrow(() -> new RuntimeException("Role CONSEILLER introuvable"));
+        // -----------------------------------------------------
+        // Vérifier role
+        // -----------------------------------------------------
 
-        Conseiller conseiller = Conseiller.builder()
-                .nom(request.getNom())
-                .prenom(request.getPrenom())
-                .email(request.getEmail())
-                .motDePasse(passwordEncoder.encode(request.getMotDePasse()))
-                .telephone(request.getTelephone())
-                .adresse(request.getAdresse())
-                .matricule(request.getMatricule())
-                .specialite("Crédit")
-                .role(role)
-                .build();
+        Role role =
+                roleRepository.findByNom("CONSEILLER")
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Role CONSEILLER introuvable"
+                                )
+                        );
 
-        conseillerRepository.save(conseiller);
+        // -----------------------------------------------------
+        // Vérifier Banque
+        // -----------------------------------------------------
+
+        if (request.getBanqueId() == null) {
+
+            throw new RuntimeException(
+                    "La banque est obligatoire pour un Conseiller."
+            );
+        }
+
+        Banque banque =
+                banqueRepository.findById(
+                        request.getBanqueId()
+                ).orElseThrow(() ->
+                        new RuntimeException(
+                                "Banque introuvable."
+                        )
+                );
+
+        // -----------------------------------------------------
+        // Vérifier Agence
+        // -----------------------------------------------------
+
+        if (request.getAgenceId() == null) {
+
+            throw new RuntimeException(
+                    "L'agence est obligatoire pour un Conseiller."
+            );
+        }
+
+        Agence agence =
+                agenceRepository.findById(
+                        request.getAgenceId()
+                ).orElseThrow(() ->
+                        new RuntimeException(
+                                "Agence introuvable."
+                        )
+                );
+
+        // -----------------------------------------------------
+        // Vérifier cohérence Banque / Agence
+        // -----------------------------------------------------
+
+        if (agence.getBanque() == null
+                || !agence.getBanque()
+                .getId()
+                .equals(banque.getId())) {
+
+            throw new RuntimeException(
+                    "L'agence sélectionnée n'appartient pas à la banque sélectionnée."
+            );
+        }
+
+        // -----------------------------------------------------
+        // Créer Conseiller
+        // -----------------------------------------------------
+
+        Conseiller conseiller =
+                Conseiller.builder()
+                        .nom(request.getNom())
+                        .prenom(request.getPrenom())
+                        .email(request.getEmail())
+                        .motDePasse(
+                                passwordEncoder.encode(
+                                        request.getMotDePasse()
+                                )
+                        )
+                        .telephone(request.getTelephone())
+                        .adresse(request.getAdresse())
+                        .matricule(request.getMatricule())
+                        .specialite("Crédit")
+                        .banque(banque)
+                        .agence(agence)
+                        .role(role)
+                        .build();
+
+        conseillerRepository.save(
+                conseiller
+        );
 
         return UtilisateurResponse.builder()
                 .id(conseiller.getId())
@@ -83,54 +184,77 @@ public class EmployeServiceImpl implements EmployeService {
                 .role(role.getNom())
                 .build();
     }
+
+
+
+
+    // =========================================================
+    // CREER RESPONSABLE CREDIT
+    // =========================================================
+
     @Override
-    public UtilisateurResponse creerDirecteur(CreateEmployeRequest request) {
+    @Transactional
+    public UtilisateurResponse creerResponsableCredit(
+            CreateEmployeRequest request
+    ) {
 
-        Role role = roleRepository.findByNom("DIRECTEUR")
-                .orElseThrow(() -> new RuntimeException("Role DIRECTEUR introuvable"));
+        // -----------------------------------------------------
+        // Vérifier role
+        // -----------------------------------------------------
 
-        Directeur directeur = Directeur.builder()
-                .nom(request.getNom())
-                .prenom(request.getPrenom())
-                .email(request.getEmail())
-                .motDePasse(passwordEncoder.encode(request.getMotDePasse()))
-                .telephone(request.getTelephone())
-                .adresse(request.getAdresse())
-                .matricule(request.getMatricule())
-                .role(role)
-                .build();
+        Role role =
+                roleRepository.findByNom(
+                        "RESPONSABLE_CREDIT"
+                ).orElseThrow(() ->
+                        new RuntimeException(
+                                "Role RESPONSABLE_CREDIT introuvable"
+                        )
+                );
 
-        directeurRepository.save(directeur);
+        // -----------------------------------------------------
+        // Vérifier Agence
+        // -----------------------------------------------------
 
-        return UtilisateurResponse.builder()
-                .id(directeur.getId())
-                .nom(directeur.getNom())
-                .prenom(directeur.getPrenom())
-                .email(directeur.getEmail())
-                .telephone(directeur.getTelephone())
-                .adresse(directeur.getAdresse())
-                .actif(directeur.getActif())
-                .role(role.getNom())
-                .build();
-    }
-    @Override
-    public UtilisateurResponse creerResponsableCredit(CreateEmployeRequest request) {
+        if (request.getAgenceId() == null) {
 
-        Role role = roleRepository.findByNom("RESPONSABLE_CREDIT")
-                .orElseThrow(() -> new RuntimeException("Role RESPONSABLE_CREDIT introuvable"));
+            throw new RuntimeException(
+                    "L'agence est obligatoire pour un Responsable Crédit."
+            );
+        }
 
-        ResponsableCredit responsable = ResponsableCredit.builder()
-                .nom(request.getNom())
-                .prenom(request.getPrenom())
-                .email(request.getEmail())
-                .motDePasse(passwordEncoder.encode(request.getMotDePasse()))
-                .telephone(request.getTelephone())
-                .adresse(request.getAdresse())
-                .matricule(request.getMatricule())
-                .role(role)
-                .build();
+        Agence agence =
+                agenceRepository.findById(
+                        request.getAgenceId()
+                ).orElseThrow(() ->
+                        new RuntimeException(
+                                "Agence introuvable."
+                        )
+                );
 
-        responsableCreditRepository.save(responsable);
+        // -----------------------------------------------------
+        // Créer Responsable
+        // -----------------------------------------------------
+
+        ResponsableCredit responsable =
+                ResponsableCredit.builder()
+                        .nom(request.getNom())
+                        .prenom(request.getPrenom())
+                        .email(request.getEmail())
+                        .motDePasse(
+                                passwordEncoder.encode(
+                                        request.getMotDePasse()
+                                )
+                        )
+                        .telephone(request.getTelephone())
+                        .adresse(request.getAdresse())
+                        .matricule(request.getMatricule())
+                        .agence(agence)
+                        .role(role)
+                        .build();
+
+        responsableCreditRepository.save(
+                responsable
+        );
 
         return UtilisateurResponse.builder()
                 .id(responsable.getId())

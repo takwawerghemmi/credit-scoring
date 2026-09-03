@@ -5,12 +5,17 @@ import com.creditscoring.dto.reponse.UtilisateurResponse;
 
 public interface EmployeService {
 
-    UtilisateurResponse creerAdministrateur(CreateEmployeRequest request);
+    UtilisateurResponse creerAdministrateur(
+            CreateEmployeRequest request
+    );
 
-    UtilisateurResponse creerConseiller(CreateEmployeRequest request);
+    UtilisateurResponse creerConseiller(
+            CreateEmployeRequest request
+    );
 
-    UtilisateurResponse creerDirecteur(CreateEmployeRequest request);
 
-    UtilisateurResponse creerResponsableCredit(CreateEmployeRequest request);
 
+    UtilisateurResponse creerResponsableCredit(
+            CreateEmployeRequest request
+    );
 }

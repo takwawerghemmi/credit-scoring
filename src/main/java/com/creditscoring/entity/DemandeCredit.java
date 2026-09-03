@@ -61,7 +61,9 @@ public class DemandeCredit {
     @ManyToOne
     @JoinColumn(name = "conseiller_id")
     private Conseiller conseiller;
-
+    @ManyToOne
+    @JoinColumn(name = "responsable_id")
+    private ResponsableCredit responsable;
     @ManyToOne
     @JoinColumn(name = "banque_id")
     private Banque banque;

@@ -3,12 +3,12 @@ package com.creditscoring.service;
 import com.creditscoring.dto.reponse.ResponsableDashboardResponse;
 import com.creditscoring.entity.CreditScore;
 import com.creditscoring.entity.DemandeCredit;
+import com.creditscoring.entity.Utilisateur;
 import com.creditscoring.entity.ValidationDemande;
-import com.creditscoring.enums.NiveauRisque;
 import com.creditscoring.enums.NiveauValidation;
-import com.creditscoring.enums.StatutDemande;
 import com.creditscoring.repository.CreditScoreRepository;
 import com.creditscoring.repository.DemandeCreditRepository;
+import com.creditscoring.repository.UtilisateurRepository;
 import com.creditscoring.repository.ValidationDemandeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,15 +26,47 @@ public class ResponsableDashboardServiceImpl
     private final DemandeCreditRepository demandeCreditRepository;
     private final CreditScoreRepository creditScoreRepository;
     private final ValidationDemandeRepository validationDemandeRepository;
+    private final UtilisateurRepository utilisateurRepository;
+
+    // =========================================================
+    // DASHBOARD RESPONSABLE CONNECTÉ
+    // =========================================================
 
     @Override
-    public ResponsableDashboardResponse getDashboard() {
+    public ResponsableDashboardResponse getDashboard(String email) {
+
+        // =====================================================
+        // Récupérer le Responsable connecté
+        // =====================================================
+
+        Utilisateur responsable =
+                utilisateurRepository.findByEmail(email)
+                        .orElseThrow(
+                                () -> new RuntimeException(
+                                        "Responsable connecté introuvable : " + email
+                                )
+                        );
+
+        // =====================================================
+        // Récupérer uniquement les demandes affectées
+        // à ce Responsable
+        // =====================================================
 
         List<DemandeCredit> demandes =
-                demandeCreditRepository.findAll();
+                demandeCreditRepository.findByResponsableId(
+                        responsable.getId()
+                );
+
+        // =====================================================
+        // Scores
+        // =====================================================
 
         List<CreditScore> scores =
                 creditScoreRepository.findAll();
+
+        // =====================================================
+        // Validations
+        // =====================================================
 
         List<ValidationDemande> validations =
                 validationDemandeRepository.findAll();
@@ -44,6 +76,10 @@ public class ResponsableDashboardServiceImpl
 
         Map<Long, Set<NiveauValidation>> validationsByDemande =
                 getValidationsByDemande(validations);
+
+        // =====================================================
+        // Construire les dossiers
+        // =====================================================
 
         List<ResponsableDashboardResponse.DossierResponsable> dossiers =
                 demandes.stream()
@@ -56,6 +92,10 @@ public class ResponsableDashboardServiceImpl
                         )
                         .toList();
 
+        // =====================================================
+        // Dossiers prêts pour la validation Responsable
+        // =====================================================
+
         List<ResponsableDashboardResponse.DossierResponsable>
                 dossiersAControler =
                 dossiers.stream()
@@ -63,26 +103,36 @@ public class ResponsableDashboardServiceImpl
                                 ResponsableDashboardServiceImpl::isReadyForResponsable
                         )
                         .sorted(
-                                Comparator
-                                        .comparing(
-                                                ResponsableDashboardResponse.DossierResponsable::getDateDemande,
-                                                Comparator.nullsLast(Comparator.reverseOrder())
+                                Comparator.comparing(
+                                        ResponsableDashboardResponse.DossierResponsable::getDateDemande,
+                                        Comparator.nullsLast(
+                                                Comparator.reverseOrder()
                                         )
+                                )
                         )
                         .toList();
+
+        // =====================================================
+        // Derniers dossiers
+        // =====================================================
 
         List<ResponsableDashboardResponse.DossierResponsable>
                 derniersDossiers =
                 dossiers.stream()
                         .sorted(
-                                Comparator
-                                        .comparing(
-                                                ResponsableDashboardResponse.DossierResponsable::getDateDemande,
-                                                Comparator.nullsLast(Comparator.reverseOrder())
+                                Comparator.comparing(
+                                        ResponsableDashboardResponse.DossierResponsable::getDateDemande,
+                                        Comparator.nullsLast(
+                                                Comparator.reverseOrder()
                                         )
+                                )
                         )
                         .limit(10)
                         .toList();
+
+        // =====================================================
+        // KPI
+        // =====================================================
 
         ResponsableDashboardResponse.Kpi kpi =
                 buildKpi(
@@ -99,10 +149,31 @@ public class ResponsableDashboardServiceImpl
                 .build();
     }
 
+    // =========================================================
+    // DÉTAIL D'UNE DEMANDE
+    // =========================================================
+
     @Override
     public ResponsableDashboardResponse.DossierResponsable getDossier(
-            Long demandeId
+            Long demandeId,
+            String email
     ) {
+
+        // =====================================================
+        // Responsable connecté
+        // =====================================================
+
+        Utilisateur responsable =
+                utilisateurRepository.findByEmail(email)
+                        .orElseThrow(
+                                () -> new RuntimeException(
+                                        "Responsable connecté introuvable : " + email
+                                )
+                        );
+
+        // =====================================================
+        // Demande
+        // =====================================================
 
         DemandeCredit demande =
                 demandeCreditRepository.findById(demandeId)
@@ -112,8 +183,31 @@ public class ResponsableDashboardServiceImpl
                                 )
                         );
 
+        // =====================================================
+        // Vérifier que cette demande appartient
+        // au Responsable connecté
+        // =====================================================
+
+        if (demande.getResponsable() == null
+                || !demande.getResponsable()
+                .getId()
+                .equals(responsable.getId())) {
+
+            throw new RuntimeException(
+                    "Accès refusé : cette demande n'est pas affectée à ce Responsable."
+            );
+        }
+
+        // =====================================================
+        // Scores
+        // =====================================================
+
         List<CreditScore> scores =
                 creditScoreRepository.findAll();
+
+        // =====================================================
+        // Validations
+        // =====================================================
 
         List<ValidationDemande> validations =
                 validationDemandeRepository.findAll();
@@ -131,6 +225,10 @@ public class ResponsableDashboardServiceImpl
         );
     }
 
+    // =========================================================
+    // KPI
+    // =========================================================
+
     private ResponsableDashboardResponse.Kpi buildKpi(
             List<ResponsableDashboardResponse.DossierResponsable> dossiers,
             List<ResponsableDashboardResponse.DossierResponsable> dossiersAControler,
@@ -146,6 +244,15 @@ public class ResponsableDashboardServiceImpl
                         .filter(v ->
                                 Boolean.TRUE.equals(v.getDecision())
                         )
+                        .filter(v ->
+                                v.getDemandeCredit() != null
+                                        && dossiers.stream().anyMatch(
+                                        d -> d.getDemandeId()
+                                                .equals(
+                                                        v.getDemandeCredit().getId()
+                                                )
+                                )
+                        )
                         .count();
 
         long deuxiemesValidations =
@@ -155,6 +262,15 @@ public class ResponsableDashboardServiceImpl
                         )
                         .filter(v ->
                                 Boolean.TRUE.equals(v.getDecision())
+                        )
+                        .filter(v ->
+                                v.getDemandeCredit() != null
+                                        && dossiers.stream().anyMatch(
+                                        d -> d.getDemandeId()
+                                                .equals(
+                                                        v.getDemandeCredit().getId()
+                                                )
+                                )
                         )
                         .count();
 
@@ -197,6 +313,15 @@ public class ResponsableDashboardServiceImpl
 
         double scoreMoyen =
                 scores.stream()
+                        .filter(s ->
+                                s.getDemandeCredit() != null
+                                        && dossiers.stream().anyMatch(
+                                        d -> d.getDemandeId()
+                                                .equals(
+                                                        s.getDemandeCredit().getId()
+                                                )
+                                )
+                        )
                         .map(CreditScore::getScore)
                         .filter(Objects::nonNull)
                         .mapToDouble(Double::doubleValue)
@@ -228,13 +353,18 @@ public class ResponsableDashboardServiceImpl
                 .build();
     }
 
+    // =========================================================
+    // CONSTRUIRE DOSSIER
+    // =========================================================
+
     private ResponsableDashboardResponse.DossierResponsable buildDossier(
             DemandeCredit demande,
             Map<Long, CreditScore> scores,
             Map<Long, Set<NiveauValidation>> validations
     ) {
 
-        CreditScore score = scores.get(demande.getId());
+        CreditScore score =
+                scores.get(demande.getId());
 
         Set<NiveauValidation> niveaux =
                 validations.getOrDefault(
@@ -271,9 +401,7 @@ public class ResponsableDashboardServiceImpl
                 .clientPrenom(prenom)
                 .montant(demande.getMontant())
                 .duree(demande.getDuree())
-                .typeCredit(
-                        demande.getTypeCredit()
-                )
+                .typeCredit(demande.getTypeCredit())
                 .statut(
                         demande.getStatut() != null
                                 ? demande.getStatut().name()
@@ -296,6 +424,10 @@ public class ResponsableDashboardServiceImpl
                 .dateDemande(demande.getDateDemande())
                 .build();
     }
+
+    // =========================================================
+    // DERNIER SCORE
+    // =========================================================
 
     private Map<Long, CreditScore> getLatestScores(
             List<CreditScore> scores
@@ -329,6 +461,10 @@ public class ResponsableDashboardServiceImpl
                 );
     }
 
+    // =========================================================
+    // VALIDATIONS PAR DEMANDE
+    // =========================================================
+
     private Map<Long, Set<NiveauValidation>>
     getValidationsByDemande(
             List<ValidationDemande> validations
@@ -359,6 +495,10 @@ public class ResponsableDashboardServiceImpl
         return result;
     }
 
+    // =========================================================
+    // PRÊT POUR RESPONSABLE
+    // =========================================================
+
     private static boolean isReadyForResponsable(
             ResponsableDashboardResponse.DossierResponsable dossier
     ) {
@@ -366,6 +506,10 @@ public class ResponsableDashboardServiceImpl
         return dossier.isPremiereValidation()
                 && !dossier.isDeuxiemeValidation();
     }
+
+    // =========================================================
+    // RISQUE
+    // =========================================================
 
     private static boolean isRisk(
             ResponsableDashboardResponse.DossierResponsable dossier,

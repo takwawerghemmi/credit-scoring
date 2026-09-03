@@ -104,11 +104,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/responsable/**")
                         .hasRole("RESPONSABLE_CREDIT")
 
-                        // =========================
-                        // DIRECTEUR
-                        // =========================
-                        .requestMatchers("/api/directeur/**")
-                        .hasRole("DIRECTEUR")
+
 
                         // =========================
                         // DEMANDES DE CRÉDIT

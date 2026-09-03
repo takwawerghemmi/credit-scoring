@@ -20,6 +20,7 @@ public class PaiementController {
 
     // =====================================================
     // CRÉER UNE TRANSACTION
+    // CLIENT
     // =====================================================
 
     @PostMapping
@@ -37,6 +38,7 @@ public class PaiementController {
 
     // =====================================================
     // CONFIRMER
+    // CLIENT
     // =====================================================
 
     @PostMapping("/{id}/confirmer")
@@ -55,6 +57,7 @@ public class PaiementController {
 
     // =====================================================
     // ÉCHEC
+    // CLIENT
     // =====================================================
 
     @PostMapping("/{id}/echouer")
@@ -77,7 +80,7 @@ public class PaiementController {
 
     @GetMapping
     @PreAuthorize(
-            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE','DIRECTEUR','ADMIN')"
+            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE_CREDIT','ADMIN')"
     )
     public ResponseEntity<List<PaiementResponse>>
     getAllPaiements() {
@@ -93,7 +96,7 @@ public class PaiementController {
 
     @GetMapping("/{id}")
     @PreAuthorize(
-            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE','DIRECTEUR','ADMIN')"
+            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE_CREDIT','ADMIN')"
     )
     public ResponseEntity<PaiementResponse>
     getPaiementById(
@@ -113,7 +116,7 @@ public class PaiementController {
 
     @GetMapping("/contrat/{contratId}")
     @PreAuthorize(
-            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE','DIRECTEUR','ADMIN')"
+            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE_CREDIT','ADMIN')"
     )
     public ResponseEntity<List<PaiementResponse>>
     getPaiementsByContrat(
@@ -129,10 +132,11 @@ public class PaiementController {
 
     // =====================================================
     // DELETE
+    // ADMIN UNIQUEMENT
     // =====================================================
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','DIRECTEUR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<String> deletePaiement(
             @PathVariable Long id
     ) {

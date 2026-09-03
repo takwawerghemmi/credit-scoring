@@ -37,21 +37,58 @@ public class DoubleValidationServiceImpl
             String role
     ) {
 
+        // Vérifier le rôle
         verifierRole(
                 role,
                 "ROLE_CONSEILLER"
         );
 
+        // Récupérer la demande
         DemandeCredit demande =
                 trouverDemande(demandeId);
 
+        // Récupérer le Conseiller connecté
         Utilisateur validateur =
                 trouverValidateur(emailValidateur);
+
+        // =====================================================
+        // Vérifier que la demande est bien en analyse
+        // =====================================================
+
+        if (demande.getStatut() != StatutDemande.EN_ANALYSE) {
+
+            throw new RuntimeException(
+                    "La demande doit être en analyse avant la première validation."
+            );
+        }
+
+        // =====================================================
+        // Vérifier que le Conseiller connecté est affecté
+        // à cette demande
+        // =====================================================
+
+        if (demande.getConseiller() == null
+                || !demande.getConseiller()
+                .getId()
+                .equals(validateur.getId())) {
+
+            throw new RuntimeException(
+                    "Ce Conseiller n'est pas affecté à cette demande."
+            );
+        }
+
+        // =====================================================
+        // Vérifier qu'il n'y a pas déjà une validation
+        // =====================================================
 
         verifierPasDejaValidee(
                 demandeId,
                 NiveauValidation.CONSEILLER
         );
+
+        // =====================================================
+        // Créer la validation
+        // =====================================================
 
         ValidationDemande validation =
                 ValidationDemande.builder()
@@ -68,6 +105,10 @@ public class DoubleValidationServiceImpl
                 validation
         );
 
+        // =====================================================
+        // Passer la demande en attente du Responsable
+        // =====================================================
+
         demande.setStatut(
                 StatutDemande.EN_ATTENTE
         );
@@ -77,10 +118,10 @@ public class DoubleValidationServiceImpl
         );
 
         // =====================================================
-        // NOTIFIER LES RESPONSABLES
+        // Notifier UNIQUEMENT le Responsable affecté
         // =====================================================
 
-        notifierResponsables(
+        notifierResponsable(
                 demande,
                 "Nouvelle validation à traiter",
                 "La demande de crédit #"
@@ -104,12 +145,14 @@ public class DoubleValidationServiceImpl
     ) {
 
         if (request == null) {
+
             throw new RuntimeException(
                     "La demande de validation est obligatoire."
             );
         }
 
         if (request.getDecision() == null) {
+
             throw new RuntimeException(
                     "La décision est obligatoire."
             );
@@ -125,22 +168,66 @@ public class DoubleValidationServiceImpl
             );
         }
 
+        // =====================================================
+        // Récupérer la demande
+        // =====================================================
+
         DemandeCredit demande =
                 trouverDemande(demandeId);
 
+        // =====================================================
+        // Récupérer le Responsable connecté
+        // =====================================================
+
         Utilisateur validateur =
-                trouverValidateur(
-                        emailValidateur
-                );
+                trouverValidateur(emailValidateur);
+
+        // =====================================================
+        // Vérifier que le Responsable connecté est bien
+        // affecté à cette demande
+        // =====================================================
+
+        if (demande.getResponsable() == null
+                || !demande.getResponsable()
+                .getId()
+                .equals(validateur.getId())) {
+
+            throw new RuntimeException(
+                    "Ce Responsable n'est pas affecté à cette demande."
+            );
+        }
+
+        // =====================================================
+        // Vérifier que la demande est en attente de validation
+        // =====================================================
+
+        if (demande.getStatut() != StatutDemande.EN_ATTENTE) {
+
+            throw new RuntimeException(
+                    "La demande doit être en attente avant la validation du Responsable."
+            );
+        }
+
+        // =====================================================
+        // Vérifier première validation Conseiller
+        // =====================================================
 
         verifierPremiereValidation(
                 demandeId
         );
 
+        // =====================================================
+        // Vérifier double validation
+        // =====================================================
+
         verifierPasDejaValidee(
                 demandeId,
                 NiveauValidation.RESPONSABLE
         );
+
+        // =====================================================
+        // Créer la validation Responsable
+        // =====================================================
 
         ValidationDemande validation =
                 ValidationDemande.builder()
@@ -164,13 +251,14 @@ public class DoubleValidationServiceImpl
         );
 
         // =====================================================
-        // RESPONSABLE ACCEPTE
+        // RESPONSABLE ACCEPTE LA VALIDATION
         // =====================================================
 
         if (Boolean.TRUE.equals(
                 request.getDecision()
         )) {
 
+            // On garde la demande en attente de décision finale.
             demande.setStatut(
                     StatutDemande.EN_ATTENTE
             );
@@ -179,25 +267,16 @@ public class DoubleValidationServiceImpl
                     demande
             );
 
-            // Notifier les directeurs
-            notifierDirecteurs(
-                    demande,
-                    "Demande prête pour décision finale",
-                    "La demande de crédit #"
-                            + demandeId
-                            + " a été validée par le Responsable et attend la décision du Directeur."
-            );
-
-            // Notifier le client
+            // Notification au client
             notifierClient(
                     demande,
-                    "Demande validée",
+                    "Validation Responsable",
                     "Votre demande de crédit #"
                             + demandeId
                             + " a été validée par le Responsable et est prête pour la décision finale."
             );
 
-            return "Validation Responsable acceptée. La demande est approuvée et prête pour la décision finale.";
+            return "Validation Responsable acceptée. La demande est prête pour la décision finale du Responsable.";
         }
 
         // =====================================================
@@ -208,10 +287,15 @@ public class DoubleValidationServiceImpl
                 StatutDemande.REFUSEE
         );
 
+        demande.setMotifRefus(
+                request.getCommentaire().trim()
+        );
+
         demandeCreditRepository.save(
                 demande
         );
 
+        // Notification au client
         notifierClient(
                 demande,
                 "Demande refusée",
@@ -223,6 +307,10 @@ public class DoubleValidationServiceImpl
 
         return "Validation Responsable refusée. La demande est refusée.";
     }
+
+    // =========================================================
+    // TROUVER DEMANDE
+    // =========================================================
 
     private DemandeCredit trouverDemande(
             Long id
@@ -236,17 +324,26 @@ public class DoubleValidationServiceImpl
                 );
     }
 
+    // =========================================================
+    // TROUVER VALIDATEUR
+    // =========================================================
+
     private Utilisateur trouverValidateur(
             String email
     ) {
 
-        return utilisateurRepository.findByEmail(email)
+        return utilisateurRepository
+                .findByEmail(email)
                 .orElseThrow(() ->
                         new RuntimeException(
                                 "Validateur connecté introuvable"
                         )
                 );
     }
+
+    // =========================================================
+    // VÉRIFIER LE RÔLE
+    // =========================================================
 
     private void verifierRole(
             String roleActuel,
@@ -260,6 +357,10 @@ public class DoubleValidationServiceImpl
             );
         }
     }
+
+    // =========================================================
+    // VÉRIFIER PREMIÈRE VALIDATION
+    // =========================================================
 
     private void verifierPremiereValidation(
             Long demandeId
@@ -289,6 +390,10 @@ public class DoubleValidationServiceImpl
             );
         }
     }
+
+    // =========================================================
+    // VÉRIFIER DOUBLE VALIDATION
+    // =========================================================
 
     private void verifierPasDejaValidee(
             Long demandeId,
@@ -340,70 +445,24 @@ public class DoubleValidationServiceImpl
     }
 
     // =========================================================
-    // NOTIFIER RESPONSABLES
+    // NOTIFIER RESPONSABLE AFFECTÉ UNIQUEMENT
     // =========================================================
 
-    private void notifierResponsables(
+    private void notifierResponsable(
             DemandeCredit demande,
             String titre,
             String message
     ) {
 
-        utilisateurRepository.findAll()
-                .stream()
-                .filter(
-                        u ->
-                                u.getRole() != null
-                                        && u.getRole().getNom() != null
-                                        && u.getRole()
-                                        .getNom()
-                                        .equalsIgnoreCase(
-                                                "RESPONSABLE_CREDIT"
-                                        )
-                )
-                .forEach(
-                        responsable ->
-                                notificationService
-                                        .creerNotificationAutomatique(
-                                                responsable,
-                                                demande,
-                                                titre,
-                                                message
-                                        )
-                );
-    }
+        if (demande.getResponsable() != null) {
 
-    // =========================================================
-    // NOTIFIER DIRECTEURS
-    // =========================================================
-
-    private void notifierDirecteurs(
-            DemandeCredit demande,
-            String titre,
-            String message
-    ) {
-
-        utilisateurRepository.findAll()
-                .stream()
-                .filter(
-                        u ->
-                                u.getRole() != null
-                                        && u.getRole().getNom() != null
-                                        && u.getRole()
-                                        .getNom()
-                                        .equalsIgnoreCase(
-                                                "DIRECTEUR"
-                                        )
-                )
-                .forEach(
-                        directeur ->
-                                notificationService
-                                        .creerNotificationAutomatique(
-                                                directeur,
-                                                demande,
-                                                titre,
-                                                message
-                                        )
-                );
+            notificationService
+                    .creerNotificationAutomatique(
+                            demande.getResponsable(),
+                            demande,
+                            titre,
+                            message
+                    );
+        }
     }
 }

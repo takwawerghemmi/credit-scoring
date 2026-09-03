@@ -4,7 +4,6 @@ import com.creditscoring.entity.Banque;
 import com.creditscoring.entity.Client;
 import com.creditscoring.entity.Contrat;
 import com.creditscoring.entity.DemandeCredit;
-import com.creditscoring.entity.Utilisateur;
 
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
@@ -28,9 +27,7 @@ public class ContratPdfServiceImpl
         implements ContratPdfService {
 
     @Override
-    public byte[] genererContratPdf(
-            Contrat contrat
-    ) {
+    public byte[] genererContratPdf(Contrat contrat) {
 
         try {
 
@@ -87,13 +84,6 @@ public class ContratPdfServiceImpl
                             8
                     );
 
-            // Signature visuelle automatique
-            Font fontSignature =
-                    FontFactory.getFont(
-                            FontFactory.HELVETICA_OBLIQUE,
-                            18
-                    );
-
             // =====================================================
             // DONNÉES
             // =====================================================
@@ -106,17 +96,13 @@ public class ContratPdfServiceImpl
                             ? demande.getClient()
                             : null;
 
-            // Directeur ayant effectué la décision
-            Utilisateur directeur =
-                    contrat.getUtilisateur();
-
             Banque banque =
                     demande != null
                             ? demande.getBanque()
                             : null;
 
             // =====================================================
-            // CLIENT
+            // INFORMATIONS CLIENT
             // =====================================================
 
             String nomClient =
@@ -131,43 +117,32 @@ public class ContratPdfServiceImpl
             String dateNaissance =
                     client != null
                             && client.getDateNaissance() != null
-                            ? client.getDateNaissance()
-                            .toString()
+                            ? client.getDateNaissance().toString()
                             : "";
 
             String cin =
                     client != null
-                            ? valeurTexte(
-                            client.getCin()
-                    )
+                            ? valeurTexte(client.getCin())
                             : "";
 
             String adresse =
                     client != null
-                            ? valeurTexte(
-                            client.getAdresse()
-                    )
+                            ? valeurTexte(client.getAdresse())
                             : "";
 
             String telephone =
                     client != null
-                            ? valeurTexte(
-                            client.getTelephone()
-                    )
+                            ? valeurTexte(client.getTelephone())
                             : "";
 
             String email =
                     client != null
-                            ? valeurTexte(
-                            client.getEmail()
-                    )
+                            ? valeurTexte(client.getEmail())
                             : "";
 
             String profession =
                     client != null
-                            ? valeurTexte(
-                            client.getProfession()
-                    )
+                            ? valeurTexte(client.getProfession())
                             : "";
 
             String revenu =
@@ -177,38 +152,6 @@ public class ContratPdfServiceImpl
                             client.getRevenuMensuel()
                     ) + " TND"
                             : "";
-
-            // =====================================================
-            // DIRECTEUR DYNAMIQUE
-            // =====================================================
-
-            String nomDirecteur = "";
-
-            if (directeur != null) {
-
-                nomDirecteur =
-                        valeurTexte(
-                                directeur.getPrenom()
-                                        + " "
-                                        + directeur.getNom()
-                        );
-            }
-
-            String fonctionDirecteur =
-                    "Directeur";
-
-            if (directeur != null
-                    && directeur.getRole() != null
-                    && directeur.getRole().getNom() != null
-                    && !directeur.getRole()
-                    .getNom()
-                    .isBlank()) {
-
-                fonctionDirecteur =
-                        directeur
-                                .getRole()
-                                .getNom();
-            }
 
             // =====================================================
             // CONTACT SOCIÉTÉ
@@ -255,9 +198,9 @@ public class ContratPdfServiceImpl
                     new float[]{1.3f, 1f}
             );
 
-            // -------------------------------
+            // -----------------------------------------------------
             // CREDITNOVA
-            // -------------------------------
+            // -----------------------------------------------------
 
             PdfPCell societeCell =
                     new PdfPCell();
@@ -294,9 +237,9 @@ public class ContratPdfServiceImpl
                     societeCell
             );
 
-            // -------------------------------
-            // TITRE
-            // -------------------------------
+            // -----------------------------------------------------
+            // TITRE CONTRAT
+            // -----------------------------------------------------
 
             PdfPCell titreCell =
                     new PdfPCell();
@@ -327,8 +270,7 @@ public class ContratPdfServiceImpl
                     new Paragraph(
                             "N° "
                                     + valeurTexte(
-                                    contrat
-                                            .getNumeroContrat()
+                                    contrat.getNumeroContrat()
                             ),
                             texteGras
                     );
@@ -490,8 +432,7 @@ public class ContratPdfServiceImpl
                     "Durée",
                     demande != null
                             && demande.getDuree() != null
-                            ? demande.getDuree()
-                            + " mois"
+                            ? demande.getDuree() + " mois"
                             : "",
                     texteGras,
                     texte
@@ -537,8 +478,7 @@ public class ContratPdfServiceImpl
                     creditTable,
                     "Date de début",
                     contrat.getDateDebut() != null
-                            ? contrat.getDateDebut()
-                            .toString()
+                            ? contrat.getDateDebut().toString()
                             : "",
                     texteGras,
                     texte
@@ -548,8 +488,7 @@ public class ContratPdfServiceImpl
                     creditTable,
                     "Date de fin",
                     contrat.getDateFin() != null
-                            ? contrat.getDateFin()
-                            .toString()
+                            ? contrat.getDateFin().toString()
                             : "",
                     texteGras,
                     texte
@@ -580,44 +519,28 @@ public class ContratPdfServiceImpl
             signatures.setWidthPercentage(100);
 
             // =====================================================
-            // DIRECTEUR
+            // SIGNATURE CREDITNOVA
             // =====================================================
 
-            PdfPCell directeurCell =
+            PdfPCell societeSignatureCell =
                     new PdfPCell();
 
-            directeurCell.setPadding(10);
+            societeSignatureCell.setPadding(10);
 
-            directeurCell.addElement(
+            societeSignatureCell.addElement(
                     new Paragraph(
                             "Pour CREDITNOVA",
                             texteGras
                     )
             );
 
-            directeurCell.addElement(
-                    new Paragraph(
-                            "Nom du Directeur : "
-                                    + nomDirecteur,
-                            texte
-                    )
-            );
-
-            directeurCell.addElement(
-                    new Paragraph(
-                            "Fonction : "
-                                    + fonctionDirecteur,
-                            texte
-                    )
-            );
-
-            directeurCell.addElement(
+            societeSignatureCell.addElement(
                     new Paragraph(" ")
             );
 
             Paragraph titreSignature =
                     new Paragraph(
-                            "Signature et cachet",
+                            "Signature officielle",
                             texteGras
                     );
 
@@ -625,27 +548,29 @@ public class ContratPdfServiceImpl
                     Element.ALIGN_CENTER
             );
 
-            directeurCell.addElement(
+            societeSignatureCell.addElement(
                     titreSignature
             );
 
-            directeurCell.addElement(
+            societeSignatureCell.addElement(
                     new Paragraph(" ")
             );
+
+            // -----------------------------------------------------
+            // TABLE SIGNATURE + CACHET
+            // -----------------------------------------------------
 
             PdfPTable signatureCachet =
                     new PdfPTable(2);
 
-            signatureCachet.setWidthPercentage(
-                    100
-            );
+            signatureCachet.setWidthPercentage(100);
 
             signatureCachet.setWidths(
                     new float[]{1.2f, 1f}
             );
 
             // =====================================================
-            // SIGNATURE AUTOMATIQUE DU DIRECTEUR
+            // SIGNATURE FIXE CREDITNOVA
             // =====================================================
 
             PdfPCell signatureCell =
@@ -659,24 +584,36 @@ public class ContratPdfServiceImpl
                     Element.ALIGN_CENTER
             );
 
-            String signatureText =
-                    nomDirecteur.isBlank()
-                            ? "Directeur"
-                            : nomDirecteur;
-
-            Paragraph signature =
-                    new Paragraph(
-                            signatureText,
-                            fontSignature
+            Image signatureImage =
+                    chargerImage(
+                            "signatures/signature-creditnova.png",
+                            210,
+                            90
                     );
 
-            signature.setAlignment(
-                    Element.ALIGN_CENTER
-            );
+            if (signatureImage != null) {
 
-            signatureCell.addElement(
-                    signature
-            );
+                signatureCell.addElement(
+                        signatureImage
+                );
+
+            } else {
+
+                Paragraph p =
+                        new Paragraph(
+                                "Signature CREDITNOVA "
+                                        + "non disponible",
+                                petit
+                        );
+
+                p.setAlignment(
+                        Element.ALIGN_CENTER
+                );
+
+                signatureCell.addElement(
+                        p
+                );
+            }
 
             signatureCell.addElement(
                     new Paragraph(" ")
@@ -684,7 +621,7 @@ public class ContratPdfServiceImpl
 
             Paragraph signatureLabel =
                     new Paragraph(
-                            "SIGNATURE DU DIRECTEUR",
+                            "SIGNATURE OFFICIELLE DE CREDITNOVA",
                             petit
                     );
 
@@ -749,11 +686,15 @@ public class ContratPdfServiceImpl
                     cachetCell
             );
 
-            directeurCell.addElement(
+            societeSignatureCell.addElement(
                     signatureCachet
             );
 
-            directeurCell.addElement(
+            societeSignatureCell.addElement(
+                    new Paragraph(" ")
+            );
+
+            societeSignatureCell.addElement(
                     new Paragraph(
                             "Date : "
                                     + java.time.LocalDate.now(),
@@ -762,7 +703,7 @@ public class ContratPdfServiceImpl
             );
 
             signatures.addCell(
-                    directeurCell
+                    societeSignatureCell
             );
 
             // =====================================================
@@ -772,9 +713,7 @@ public class ContratPdfServiceImpl
             PdfPCell clientSignatureCell =
                     new PdfPCell();
 
-            clientSignatureCell.setPadding(
-                    10
-            );
+            clientSignatureCell.setPadding(10);
 
             clientSignatureCell.addElement(
                     new Paragraph(
@@ -803,26 +742,65 @@ public class ContratPdfServiceImpl
                     new Paragraph(" ")
             );
 
-            clientSignatureCell.addElement(
-                    new Paragraph(
-                            "Signature :",
-                            texte
-                    )
-            );
+            // =====================================================
+            // SIGNATURE CLIENT
+            // =====================================================
 
-            clientSignatureCell.addElement(
-                    new Paragraph(
-                            "\n\n________________________",
-                            texte
-                    )
-            );
+            if (contrat.getSignatureClient() != null
+                    && !contrat.getSignatureClient().isBlank()) {
 
-            clientSignatureCell.addElement(
-                    new Paragraph(
-                            "Date : __________________",
-                            texte
-                    )
-            );
+                clientSignatureCell.addElement(
+                        new Paragraph(
+                                "Signature électronique :",
+                                texteGras
+                        )
+                );
+
+                clientSignatureCell.addElement(
+                        new Paragraph(
+                                contrat.getSignatureClient(),
+                                texte
+                        )
+                );
+
+                String dateSignature = contrat.getDateSignature() != null
+                        ? contrat.getDateSignature()
+                        .format(
+                                java.time.format.DateTimeFormatter
+                                        .ofPattern("dd/MM/yyyy HH:mm")
+                        )
+                        : "";
+
+                clientSignatureCell.addElement(
+                        new Paragraph(
+                                "Date de signature : " + dateSignature,
+                                texte
+                        )
+                );
+
+            } else {
+
+                clientSignatureCell.addElement(
+                        new Paragraph(
+                                "Signature :",
+                                texte
+                        )
+                );
+
+                clientSignatureCell.addElement(
+                        new Paragraph(
+                                "\n\n________________________",
+                                texte
+                        )
+                );
+
+                clientSignatureCell.addElement(
+                        new Paragraph(
+                                "Date : __________________",
+                                texte
+                        )
+                );
+            }
 
             signatures.addCell(
                     clientSignatureCell
@@ -980,13 +958,8 @@ public class ContratPdfServiceImpl
         labelCell.setPadding(6);
         valueCell.setPadding(6);
 
-        table.addCell(
-                labelCell
-        );
-
-        table.addCell(
-                valueCell
-        );
+        table.addCell(labelCell);
+        table.addCell(valueCell);
     }
 
     // =========================================================
@@ -1011,7 +984,7 @@ public class ContratPdfServiceImpl
     }
 
     // =========================================================
-    // HELPER : IMAGE DU CACHET
+    // HELPER : CHARGER IMAGE
     // =========================================================
 
     private Image chargerImage(
@@ -1025,19 +998,14 @@ public class ContratPdfServiceImpl
             URL resource =
                     getClass()
                             .getClassLoader()
-                            .getResource(
-                                    resourcePath
-                            );
+                            .getResource(resourcePath);
 
             if (resource == null) {
-
                 return null;
             }
 
             Image image =
-                    Image.getInstance(
-                            resource
-                    );
+                    Image.getInstance(resource);
 
             image.scaleToFit(
                     largeur,

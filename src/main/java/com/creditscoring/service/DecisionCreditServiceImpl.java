@@ -29,29 +29,45 @@ public class DecisionCreditServiceImpl
     private final ContratService contratService;
     private final NotificationService notificationService;
 
+    // =========================================================
+    // DÉCISION FINALE - RESPONSABLE CRÉDIT
+    // =========================================================
+
     @Override
     @Transactional
     public DecisionResponse prendreDecision(
             DecisionRequest request,
             String role,
-            String emailDirecteur
+            String emailResponsable
     ) {
 
-        if (!"ROLE_DIRECTEUR".equals(role)) {
+        // =====================================================
+        // Vérifier le rôle
+        // =====================================================
+
+        if (!"ROLE_RESPONSABLE_CREDIT".equals(role)) {
 
             throw new RuntimeException(
-                    "Accès interdit : seul le directeur peut prendre la décision finale."
+                    "Accès interdit : seul le Responsable Crédit peut prendre la décision finale."
             );
         }
 
-        Utilisateur directeur =
+        // =====================================================
+        // Récupérer le Responsable connecté
+        // =====================================================
+
+        Utilisateur responsable =
                 utilisateurRepository.findByEmail(
-                        emailDirecteur
+                        emailResponsable
                 ).orElseThrow(() ->
                         new RuntimeException(
-                                "Directeur connecté introuvable."
+                                "Responsable Crédit connecté introuvable."
                         )
                 );
+
+        // =====================================================
+        // Récupérer le score
+        // =====================================================
 
         CreditScore score =
                 creditScoreRepository.findById(
@@ -61,6 +77,10 @@ public class DecisionCreditServiceImpl
                                 "Score introuvable."
                         )
                 );
+
+        // =====================================================
+        // Vérifier la demande
+        // =====================================================
 
         if (score.getDemandeCredit() == null) {
 
@@ -72,6 +92,25 @@ public class DecisionCreditServiceImpl
         DemandeCredit demande =
                 score.getDemandeCredit();
 
+        // =====================================================
+        // Vérifier que le Responsable est bien affecté
+        // à cette demande
+        // =====================================================
+
+        if (demande.getResponsable() == null
+                || !demande.getResponsable()
+                .getId()
+                .equals(responsable.getId())) {
+
+            throw new RuntimeException(
+                    "Accès interdit : cette demande n'est pas affectée à ce Responsable."
+            );
+        }
+
+        // =====================================================
+        // Vérifier le statut
+        // =====================================================
+
         if (demande.getStatut()
                 != StatutDemande.EN_ATTENTE) {
 
@@ -79,6 +118,10 @@ public class DecisionCreditServiceImpl
                     "La demande doit être en attente de décision."
             );
         }
+
+        // =====================================================
+        // Vérifier la validation Responsable
+        // =====================================================
 
         ValidationDemande validationResponsable =
                 validationDemandeRepository
@@ -88,18 +131,26 @@ public class DecisionCreditServiceImpl
                         )
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "La validation du responsable est obligatoire avant la décision finale."
+                                        "La validation du Responsable est obligatoire avant la décision finale."
                                 )
                         );
+
+        // =====================================================
+        // Vérifier que la validation est favorable
+        // =====================================================
 
         if (!Boolean.TRUE.equals(
                 validationResponsable.getDecision()
         )) {
 
             throw new RuntimeException(
-                    "La validation du responsable n'est pas favorable."
+                    "La validation du Responsable n'est pas favorable."
             );
         }
+
+        // =====================================================
+        // Vérifier qu'une décision n'existe pas déjà
+        // =====================================================
 
         if (decisionRepository
                 .findByCreditScore(score)
@@ -110,19 +161,27 @@ public class DecisionCreditServiceImpl
             );
         }
 
+        // =====================================================
+        // Créer la décision
+        // =====================================================
+
         DecisionCredit decision =
                 new DecisionCredit();
 
-        decision.setCreditScore(score);
+        decision.setCreditScore(
+                score
+        );
+
         decision.setAccepte(
                 request.getAccepte()
         );
+
         decision.setCommentaire(
                 request.getCommentaire()
         );
 
         // =====================================================
-        // APPROUVEE
+        // RESPONSABLE APPROUVE
         // =====================================================
 
         if (Boolean.TRUE.equals(
@@ -133,15 +192,20 @@ public class DecisionCreditServiceImpl
                     StatutDemande.APPROUVEE
             );
 
-            ContratService contratServiceLocal =
-                    this.contratService;
+            // =================================================
+            // Créer automatiquement le contrat
+            // avec le Responsable comme décideur
+            // =================================================
 
-            contratServiceLocal.creerContratAutomatiquement(
+            contratService.creerContratAutomatiquement(
                     demande,
-                    directeur
+                    responsable
             );
 
-            // Client: décision + contrat
+            // =================================================
+            // Notification Client
+            // =================================================
+
             if (demande.getClient() != null) {
 
                 notificationService
@@ -151,15 +215,16 @@ public class DecisionCreditServiceImpl
                                 "Crédit approuvé",
                                 "Votre demande de crédit #"
                                         + demande.getId()
-                                        + " a été approuvée par le Directeur. Le contrat a été créé automatiquement."
+                                        + " a été approuvée par le Responsable Crédit. "
+                                        + "Le contrat a été créé automatiquement."
                         );
             }
 
         } else {
 
-            // =====================================================
-            // REFUSEE
-            // =====================================================
+            // =================================================
+            // RESPONSABLE REFUSE
+            // =================================================
 
             demande.setStatut(
                     StatutDemande.REFUSEE
@@ -168,6 +233,10 @@ public class DecisionCreditServiceImpl
             demande.setMotifRefus(
                     request.getCommentaire()
             );
+
+            // =================================================
+            // Notification Client
+            // =================================================
 
             if (demande.getClient() != null) {
 
@@ -178,11 +247,16 @@ public class DecisionCreditServiceImpl
                                 "Crédit refusé",
                                 "Votre demande de crédit #"
                                         + demande.getId()
-                                        + " a été refusée par le Directeur. Motif : "
+                                        + " a été refusée par le Responsable Crédit. "
+                                        + "Motif : "
                                         + request.getCommentaire()
                         );
             }
         }
+
+        // =====================================================
+        // Sauvegarder la décision
+        // =====================================================
 
         decisionRepository.save(
                 decision
@@ -191,6 +265,10 @@ public class DecisionCreditServiceImpl
         creditScoreRepository.save(
                 score
         );
+
+        // =====================================================
+        // Préparer la réponse
+        // =====================================================
 
         DecisionResponse response =
                 new DecisionResponse();

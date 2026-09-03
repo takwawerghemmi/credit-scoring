@@ -31,9 +31,5 @@ public class DemandeCreditRequest {
     private Long clientId;
 
     @NotNull
-    private Long conseillerId;
-
-    @NotNull
     private Long banqueId;
-
 }

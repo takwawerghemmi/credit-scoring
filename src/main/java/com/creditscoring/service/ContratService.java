@@ -15,10 +15,18 @@ public interface ContratService {
 
     Contrat creerContratAutomatiquement(
             DemandeCredit demande,
-            Utilisateur directeur
+            Utilisateur responsable
     );
 
     List<Contrat> getAllContrats();
+
+    List<Contrat> getContratsDuResponsable(
+            String email
+    );
+
+    List<Contrat> getContratsDuClient(
+            String email
+    );
 
     Contrat getContratById(
             Long id
@@ -31,6 +39,11 @@ public interface ContratService {
     Contrat updateContrat(
             Long id,
             ContratRequest request
+    );
+
+    String envoyerContratAuClient(
+            Long contratId,
+            String emailResponsable
     );
 
     void deleteContrat(

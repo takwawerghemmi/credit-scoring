@@ -7,13 +7,26 @@ import java.util.List;
 
 public interface GarantieService {
 
-    GarantieResponse ajouter(GarantieRequest request);
-
-    List<GarantieResponse> afficherToutes();
-
-    List<GarantieResponse> afficherParDemande(
-            Long demandeId
+    GarantieResponse ajouter(
+            GarantieRequest request,
+            String emailUtilisateur,
+            String roleUtilisateur
     );
 
-    void supprimer(Long id);
+    List<GarantieResponse> afficherToutes(
+            String emailUtilisateur,
+            String roleUtilisateur
+    );
+
+    List<GarantieResponse> afficherParDemande(
+            Long demandeId,
+            String emailUtilisateur,
+            String roleUtilisateur
+    );
+
+    void supprimer(
+            Long id,
+            String emailUtilisateur,
+            String roleUtilisateur
+    );
 }

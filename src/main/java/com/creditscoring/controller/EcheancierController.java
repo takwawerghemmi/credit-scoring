@@ -10,6 +10,7 @@ import com.creditscoring.service.EcheancierService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,17 +25,19 @@ public class EcheancierController {
     private final DemandeCreditRepository demandeCreditRepository;
     private final ContratRepository contratRepository;
 
+
     // =====================================================
-    // ANCIEN ENDPOINT : CALCUL THÉORIQUE
+    // CALCUL THÉORIQUE
     // =====================================================
 
     @GetMapping("/{id}")
     @PreAuthorize(
-            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE','DIRECTEUR','ADMIN')"
+            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE_CREDIT','ADMIN')"
     )
     public ResponseEntity<List<AmortissementResponse>>
     generer(
-            @PathVariable Long id
+            @PathVariable Long id,
+            Authentication authentication
     ) {
 
         DemandeCredit demande =
@@ -42,25 +45,33 @@ public class EcheancierController {
                         .findById(id)
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "Demande introuvable"
+                                        "Demande introuvable."
                                 )
                         );
 
         return ResponseEntity.ok(
                 echeancierService.genererEcheancier(
-                        demande
+                        demande,
+                        authentication.getName()
                 )
         );
     }
 
+
     // =====================================================
     // CRÉER LES ÉCHÉANCES RÉELLES
     // =====================================================
+    //
+    // Cette opération est interne au workflow après
+    // signature du contrat.
+    //
+    // On ne permet pas au CLIENT / RESPONSABLE de créer
+    // manuellement un échéancier.
+    //
+    // =====================================================
 
     @PostMapping("/contrat/{contratId}")
-    @PreAuthorize(
-            "hasAnyRole('CLIENT','DIRECTEUR','ADMIN')"
-    )
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<EcheanceResponse>>
     creerEcheances(
             @PathVariable Long contratId
@@ -71,7 +82,7 @@ public class EcheancierController {
                         .findById(contratId)
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "Contrat introuvable"
+                                        "Contrat introuvable."
                                 )
                         );
 
@@ -82,22 +93,25 @@ public class EcheancierController {
         );
     }
 
+
     // =====================================================
     // RÉCUPÉRER LES ÉCHÉANCES D'UN CONTRAT
     // =====================================================
 
     @GetMapping("/contrat/{contratId}")
     @PreAuthorize(
-            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE','DIRECTEUR','ADMIN')"
+            "hasAnyRole('CLIENT','CONSEILLER','RESPONSABLE_CREDIT','ADMIN')"
     )
     public ResponseEntity<List<EcheanceResponse>>
     getEcheances(
-            @PathVariable Long contratId
+            @PathVariable Long contratId,
+            Authentication authentication
     ) {
 
         return ResponseEntity.ok(
                 echeancierService.getEcheancesByContrat(
-                        contratId
+                        contratId,
+                        authentication.getName()
                 )
         );
     }

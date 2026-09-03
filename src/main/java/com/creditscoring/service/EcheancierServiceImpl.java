@@ -2,17 +2,21 @@ package com.creditscoring.service;
 
 import com.creditscoring.dto.reponse.AmortissementResponse;
 import com.creditscoring.dto.reponse.EcheanceResponse;
+import com.creditscoring.entity.Client;
+import com.creditscoring.entity.Conseiller;
 import com.creditscoring.entity.Contrat;
 import com.creditscoring.entity.DemandeCredit;
 import com.creditscoring.entity.Echeance;
+import com.creditscoring.entity.ResponsableCredit;
+import com.creditscoring.entity.Utilisateur;
 import com.creditscoring.enums.StatutEcheance;
 import com.creditscoring.repository.ContratRepository;
 import com.creditscoring.repository.EcheanceRepository;
+import com.creditscoring.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,6 +27,8 @@ public class EcheancierServiceImpl
 
     private final EcheanceRepository echeanceRepository;
     private final ContratRepository contratRepository;
+    private final UtilisateurRepository utilisateurRepository;
+
 
     // =====================================================
     // CALCUL THÉORIQUE DE L'AMORTISSEMENT
@@ -30,17 +36,27 @@ public class EcheancierServiceImpl
 
     @Override
     public List<AmortissementResponse> genererEcheancier(
-            DemandeCredit demande
+            DemandeCredit demande,
+            String email
     ) {
-
-        List<AmortissementResponse> echeancier =
-                new ArrayList<>();
 
         if (demande == null) {
             throw new RuntimeException(
                     "Demande introuvable."
             );
         }
+
+        // -------------------------------------------------
+        // Vérification des droits
+        // -------------------------------------------------
+
+        verifierAccesDemande(
+                demande,
+                email
+        );
+
+        List<AmortissementResponse> echeancier =
+                new ArrayList<>();
 
         if (demande.getMontant() == null) {
             throw new RuntimeException(
@@ -140,6 +156,7 @@ public class EcheancierServiceImpl
         return echeancier;
     }
 
+
     // =====================================================
     // CRÉER LES ÉCHÉANCES RÉELLES EN BASE
     // =====================================================
@@ -196,9 +213,9 @@ public class EcheancierServiceImpl
             );
         }
 
-        // -----------------------------------------------------
-        // Ne pas créer deux fois les mêmes échéances
-        // -----------------------------------------------------
+        // -------------------------------------------------
+        // Ne jamais créer deux fois les mêmes échéances
+        // -------------------------------------------------
 
         List<Echeance> existantes =
                 echeanceRepository.findByContratId(
@@ -254,21 +271,48 @@ public class EcheancierServiceImpl
         );
     }
 
+
     // =====================================================
     // RÉCUPÉRER LES ÉCHÉANCES D'UN CONTRAT
     // =====================================================
 
     @Override
     public List<EcheanceResponse> getEcheancesByContrat(
-            Long contratId
+            Long contratId,
+            String email
     ) {
 
-        if (!contratRepository.existsById(contratId)) {
+        if (contratId == null) {
 
             throw new RuntimeException(
-                    "Contrat introuvable."
+                    "L'identifiant du contrat est obligatoire."
             );
         }
+
+        Contrat contrat =
+                contratRepository
+                        .findById(contratId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Contrat introuvable."
+                                )
+                        );
+
+        if (contrat.getDemandeCredit() == null) {
+
+            throw new RuntimeException(
+                    "La demande associée au contrat est introuvable."
+            );
+        }
+
+        // -------------------------------------------------
+        // Vérification de l'accès
+        // -------------------------------------------------
+
+        verifierAccesDemande(
+                contrat.getDemandeCredit(),
+                email
+        );
 
         List<Echeance> echeances =
                 echeanceRepository.findByContratId(
@@ -279,6 +323,114 @@ public class EcheancierServiceImpl
                 echeances
         );
     }
+
+
+    // =====================================================
+    // VÉRIFIER L'ACCÈS À UNE DEMANDE
+    // =====================================================
+
+    private void verifierAccesDemande(
+            DemandeCredit demande,
+            String email
+    ) {
+
+        if (email == null || email.isBlank()) {
+
+            throw new RuntimeException(
+                    "Utilisateur connecté introuvable."
+            );
+        }
+
+        Utilisateur utilisateur =
+                utilisateurRepository
+                        .findByEmail(email)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Utilisateur connecté introuvable."
+                                )
+                        );
+
+        // -------------------------------------------------
+        // ADMIN
+        // -------------------------------------------------
+
+        if (utilisateur.getRole() != null
+                && "ADMIN".equals(
+                utilisateur.getRole().getNom()
+        )) {
+
+            return;
+        }
+
+        // -------------------------------------------------
+        // CLIENT
+        // -------------------------------------------------
+
+        if (utilisateur instanceof Client) {
+
+            if (demande.getClient() == null
+                    || demande.getClient().getId() == null
+                    || !demande.getClient()
+                    .getId()
+                    .equals(utilisateur.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande n'appartient pas au client connecté."
+                );
+            }
+
+            return;
+        }
+
+        // -------------------------------------------------
+        // CONSEILLER
+        // -------------------------------------------------
+
+        if (utilisateur instanceof Conseiller) {
+
+            if (demande.getConseiller() == null
+                    || demande.getConseiller().getId() == null
+                    || !demande.getConseiller()
+                    .getId()
+                    .equals(utilisateur.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande n'est pas affectée au conseiller connecté."
+                );
+            }
+
+            return;
+        }
+
+        // -------------------------------------------------
+        // RESPONSABLE CRÉDIT
+        // -------------------------------------------------
+
+        if (utilisateur instanceof ResponsableCredit) {
+
+            if (demande.getResponsable() == null
+                    || demande.getResponsable().getId() == null
+                    || !demande.getResponsable()
+                    .getId()
+                    .equals(utilisateur.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande n'est pas affectée au responsable connecté."
+                );
+            }
+
+            return;
+        }
+
+        // -------------------------------------------------
+        // Autre utilisateur
+        // -------------------------------------------------
+
+        throw new RuntimeException(
+                "Accès interdit."
+        );
+    }
+
 
     // =====================================================
     // CONVERSION ENTITY -> RESPONSE
@@ -324,6 +476,7 @@ public class EcheancierServiceImpl
 
         return responses;
     }
+
 
     // =====================================================
     // ARRONDIR

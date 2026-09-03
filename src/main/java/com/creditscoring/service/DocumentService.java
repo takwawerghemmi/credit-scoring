@@ -8,12 +8,20 @@ import java.util.List;
 
 public interface DocumentService {
 
+    // =========================================================
+    // UPLOAD
+    // =========================================================
+
     DocumentResponse ajouterFichier(
             MultipartFile file,
             String nom,
             String type,
             Long demandeCreditId
     );
+
+    // =========================================================
+    // GET ALL DOCUMENTS ACCESSIBLES
+    // =========================================================
 
     List<DocumentResponse> afficherTous();
 
@@ -22,4 +30,21 @@ public interface DocumentService {
     Resource preview(Long id);
 
     Resource download(Long id);
+
+    void validerDocument(Long id);
+
+    void refuserDocument(Long id);
+
+
+    // =========================================================
+    // GET DOCUMENTS D'UNE DEMANDE
+    // =========================================================
+
+    List<DocumentResponse> afficherParDemande(
+            Long demandeCreditId
+    );
+
+
+
+
 }

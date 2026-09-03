@@ -13,7 +13,8 @@ public interface DemandeCreditRepository extends JpaRepository<DemandeCredit, Lo
     // Requêtes de base
     // ==========================
     List<DemandeCredit> findByClientId(Long clientId);
-
+List<DemandeCredit> findByConseillerId(Long conseillerId);
+List<DemandeCredit> findByResponsableId(Long responsableId);
 // ==========================
 // KPI CLIENT
 // ==========================

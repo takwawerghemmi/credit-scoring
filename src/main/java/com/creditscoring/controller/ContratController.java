@@ -1,11 +1,6 @@
 package com.creditscoring.controller;
 
-import com.creditscoring.dto.request.ContratRequest;
 import com.creditscoring.entity.Contrat;
-import com.creditscoring.entity.DemandeCredit;
-import com.creditscoring.entity.Utilisateur;
-import com.creditscoring.repository.DemandeCreditRepository;
-import com.creditscoring.repository.UtilisateurRepository;
 import com.creditscoring.service.ContratService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,91 +17,185 @@ import java.util.List;
 public class ContratController {
 
     private final ContratService contratService;
-    private final DemandeCreditRepository demandeCreditRepository;
-    private final UtilisateurRepository utilisateurRepository;
 
     // =========================================================
-    // CREATION MANUELLE
+    // RESPONSABLE
+    // VOIR SES CONTRATS
     // =========================================================
 
-    @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','DIRECTEUR')")
-    public ResponseEntity<Contrat> creerContrat(
-            @RequestBody ContratRequest request
+    @GetMapping("/responsable/mes-contrats")
+    @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
+    public ResponseEntity<List<Contrat>> mesContratsResponsable(
+            Authentication authentication
     ) {
+
         return ResponseEntity.ok(
-                contratService.creerContrat(request)
+                contratService.getContratsDuResponsable(
+                        authentication.getName()
+                )
         );
     }
 
     // =========================================================
-    // LISTE DES CONTRATS
+    // RESPONSABLE
+    // VOIR UN CONTRAT
+    // =========================================================
+
+    @GetMapping("/responsable/{id}")
+    @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
+    public ResponseEntity<Contrat> getContratResponsable(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+
+        Contrat contrat =
+                contratService.getContratById(
+                        id
+                );
+
+        if (contrat.getUtilisateur() == null
+                || !contrat.getUtilisateur()
+                .getEmail()
+                .equals(
+                        authentication.getName()
+                )) {
+
+            throw new RuntimeException(
+                    "Accès interdit : ce contrat appartient à un autre Responsable."
+            );
+        }
+
+        return ResponseEntity.ok(
+                contrat
+        );
+    }
+
+    // =========================================================
+    // RESPONSABLE
+    // VOIR CONTRAT PAR DEMANDE
+    // =========================================================
+
+    @GetMapping("/responsable/demande/{demandeId}")
+    @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
+    public ResponseEntity<Contrat> getContratResponsableParDemande(
+            @PathVariable Long demandeId,
+            Authentication authentication
+    ) {
+
+        Contrat contrat =
+                contratService.getContratByDemandeId(
+                        demandeId
+                );
+
+        if (contrat.getUtilisateur() == null
+                || !contrat.getUtilisateur()
+                .getEmail()
+                .equals(
+                        authentication.getName()
+                )) {
+
+            throw new RuntimeException(
+                    "Accès interdit : ce contrat appartient à un autre Responsable."
+            );
+        }
+
+        return ResponseEntity.ok(
+                contrat
+        );
+    }
+
+    // =========================================================
+    // RESPONSABLE
+    // ENVOYER AU CLIENT
+    // =========================================================
+
+    @PostMapping("/{id}/envoyer-client")
+    @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
+    public ResponseEntity<String> envoyerAuClient(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+
+        return ResponseEntity.ok(
+                contratService.envoyerContratAuClient(
+                        id,
+                        authentication.getName()
+                )
+        );
+    }
+
+    // =========================================================
+    // CLIENT
+    // VOIR SES CONTRATS
+    // =========================================================
+
+    @GetMapping("/client/mes-contrats")
+    @PreAuthorize("hasRole('CLIENT')")
+    public ResponseEntity<List<Contrat>> mesContratsClient(
+            Authentication authentication
+    ) {
+
+        return ResponseEntity.ok(
+                contratService.getContratsDuClient(
+                        authentication.getName()
+                )
+        );
+    }
+
+    // =========================================================
+    // CLIENT
+    // VOIR UN CONTRAT
+    // =========================================================
+
+    @GetMapping("/client/{id}")
+    @PreAuthorize("hasRole('CLIENT')")
+    public ResponseEntity<Contrat> getContratClient(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+
+        Contrat contrat =
+                contratService.getContratById(
+                        id
+                );
+
+        if (contrat.getDemandeCredit() == null
+                || contrat.getDemandeCredit()
+                .getClient() == null
+                || !contrat.getDemandeCredit()
+                .getClient()
+                .getEmail()
+                .equals(
+                        authentication.getName()
+                )) {
+
+            throw new RuntimeException(
+                    "Accès interdit : ce contrat n'appartient pas au client connecté."
+            );
+        }
+
+        return ResponseEntity.ok(
+                contrat
+        );
+    }
+
+    // =========================================================
+    // ADMIN
+    // VOIR TOUS LES CONTRATS
     // =========================================================
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','DIRECTEUR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<Contrat>> getAllContrats() {
+
         return ResponseEntity.ok(
                 contratService.getAllContrats()
         );
     }
 
     // =========================================================
-    // CONTRAT PAR ID
-    // =========================================================
-
-    @GetMapping("/{id}")
-    @PreAuthorize(
-            "hasAnyRole('CLIENT','ADMIN','DIRECTEUR')"
-    )
-    public ResponseEntity<Contrat> getContratById(
-            @PathVariable Long id
-    ) {
-        return ResponseEntity.ok(
-                contratService.getContratById(id)
-        );
-    }
-
-    // =========================================================
-    // CONTRAT PAR DEMANDE
-    // =========================================================
-
-    @GetMapping("/demande/{demandeId}")
-    @PreAuthorize(
-            "hasAnyRole('CLIENT','ADMIN','DIRECTEUR')"
-    )
-    public ResponseEntity<Contrat> getContratByDemande(
-            @PathVariable Long demandeId
-    ) {
-        return ResponseEntity.ok(
-                contratService.getContratByDemandeId(
-                        demandeId
-                )
-        );
-    }
-
-    // =========================================================
-    // MODIFICATION
-    // =========================================================
-
-    @PutMapping("/{id}")
-    @PreAuthorize(
-            "hasAnyRole('ADMIN','DIRECTEUR')"
-    )
-    public ResponseEntity<Contrat> updateContrat(
-            @PathVariable Long id,
-            @RequestBody ContratRequest request
-    ) {
-        return ResponseEntity.ok(
-                contratService.updateContrat(
-                        id,
-                        request
-                )
-        );
-    }
-
-    // =========================================================
-    // SUPPRESSION
+    // DELETE
+    // ADMIN
     // =========================================================
 
     @DeleteMapping("/{id}")
@@ -115,66 +204,12 @@ public class ContratController {
             @PathVariable Long id
     ) {
 
-        contratService.deleteContrat(id);
+        contratService.deleteContrat(
+                id
+        );
 
         return ResponseEntity.ok(
                 "Contrat supprimé avec succès."
-        );
-    }
-
-    // =========================================================
-    // CREATION AUTOMATIQUE POUR UNE DEMANDE DEJA APPROUVEE
-    // =========================================================
-    //
-    // Cette route sert à rattraper la demande #2 qui était
-    // déjà APPROUVEE avant qu'on ajoute la création automatique.
-    //
-    // Après cette correction, les nouvelles approbations
-    // passent directement par DecisionCreditService.
-    // =========================================================
-
-    @PostMapping("/automatique/demande/{demandeId}")
-    @PreAuthorize("hasAnyRole('DIRECTEUR','ADMIN')")
-    public ResponseEntity<Contrat> creerAutomatiquement(
-            @PathVariable Long demandeId,
-            Authentication authentication
-    ) {
-
-        DemandeCredit demande =
-                demandeCreditRepository.findById(
-                        demandeId
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "Demande introuvable"
-                        )
-                );
-        if (demande.getStatut() == null
-                || (
-                !demande.getStatut().name().equals("APPROUVEE")
-                        && !demande.getStatut().name().equals("CONTRAT_SIGNE")
-        )) {
-
-            throw new RuntimeException(
-                    "La demande doit être APPROUVEE ou CONTRAT_SIGNE avant la création du contrat."
-            );
-        }
-        Utilisateur utilisateur =
-                utilisateurRepository.findByEmail(
-                        authentication.getName()
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "Utilisateur connecté introuvable."
-                        )
-                );
-
-        Contrat contrat =
-                contratService.creerContratAutomatiquement(
-                        demande,
-                        utilisateur
-                );
-
-        return ResponseEntity.ok(
-                contrat
         );
     }
 }

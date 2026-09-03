@@ -9,6 +9,7 @@ public class PredictionResponse {
 
     private String prediction;
 
-    private double probabilite;
+    private double score;
 
+    private double probabilite;
 }

@@ -1,5 +1,6 @@
 package com.creditscoring.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -33,7 +34,12 @@ public class Agence {
     @JoinColumn(name = "banque_id")
     private Banque banque;
 
-    @OneToMany(mappedBy = "agence", cascade = CascadeType.ALL)
+    @JsonIgnore
+    @OneToMany(
+            mappedBy = "agence",
+            cascade = CascadeType.ALL
+    )
     @Builder.Default
-    private List<Conseiller> conseillers = new ArrayList<>();
+    private List<Conseiller> conseillers =
+            new ArrayList<>();
 }

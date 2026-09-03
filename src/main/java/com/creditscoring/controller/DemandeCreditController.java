@@ -47,9 +47,14 @@ public class DemandeCreditController {
 
     @PreAuthorize("hasRole('CONSEILLER')")
     @GetMapping
-    public ResponseEntity<List<DemandeCreditResponse>> afficherToutes() {
+    public ResponseEntity<List<DemandeCreditResponse>> afficherToutes(
+            Authentication authentication) {
 
-        return ResponseEntity.ok(service.afficherToutes());
+        String emailUtilisateur = authentication.getName();
+
+        return ResponseEntity.ok(
+                service.afficherParConseiller(emailUtilisateur)
+        );
     }
 
     @PreAuthorize("hasAnyRole('CLIENT', 'CONSEILLER')")

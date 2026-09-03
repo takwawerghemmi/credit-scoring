@@ -1,5 +1,5 @@
 package com.creditscoring.service;
-
+import com.creditscoring.repository.UtilisateurRepository;
 import com.creditscoring.dto.reponse.NotificationResponse;
 import com.creditscoring.entity.DemandeCredit;
 import com.creditscoring.entity.Notification;
@@ -7,6 +7,8 @@ import com.creditscoring.entity.Utilisateur;
 import com.creditscoring.enums.CanalNotification;
 import com.creditscoring.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,23 +18,34 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class NotificationServiceImpl
-        implements NotificationService {
+public class NotificationServiceImpl implements NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final EmailService emailService;
+    private final UtilisateurRepository utilisateurRepository;    // =====================================================
+    // GET ALL
+    // =====================================================
 
     @Override
     public List<NotificationResponse> getAllNotifications() {
 
-        return notificationRepository.findAll()
+        Utilisateur utilisateurConnecte = getUtilisateurConnecte();
+
+        return notificationRepository
+                .findByUtilisateurId(utilisateurConnecte.getId())
                 .stream()
                 .map(this::convertir)
                 .collect(Collectors.toList());
     }
 
+    // =====================================================
+    // GET BY ID
+    // =====================================================
+
     @Override
     public NotificationResponse getNotificationById(Long id) {
+
+        Utilisateur utilisateurConnecte = getUtilisateurConnecte();
 
         Notification notification =
                 notificationRepository.findById(id)
@@ -42,12 +55,36 @@ public class NotificationServiceImpl
                                 )
                         );
 
+        // Sécurité : la notification doit appartenir
+        // à l'utilisateur connecté
+        if (notification.getUtilisateur() == null
+                || !notification.getUtilisateur().getId()
+                .equals(utilisateurConnecte.getId())) {
+
+            throw new RuntimeException(
+                    "Accès interdit à cette notification."
+            );
+        }
+
         return convertir(notification);
     }
 
+    // =====================================================
+    // GET BY USER
+    // =====================================================
+
     @Override
-    public List<NotificationResponse>
-    getNotificationsByUtilisateur(Long utilisateurId) {
+    public List<NotificationResponse> getNotificationsByUtilisateur(
+            Long utilisateurId) {
+
+        Utilisateur utilisateurConnecte = getUtilisateurConnecte();
+
+        // Un utilisateur ne peut consulter que ses propres notifications.
+        if (!utilisateurConnecte.getId().equals(utilisateurId)) {
+            throw new RuntimeException(
+                    "Accès interdit aux notifications d'un autre utilisateur."
+            );
+        }
 
         return notificationRepository
                 .findByUtilisateurId(utilisateurId)
@@ -56,16 +93,33 @@ public class NotificationServiceImpl
                 .collect(Collectors.toList());
     }
 
+    // =====================================================
+    // DELETE
+    // =====================================================
+
     @Override
     public void supprimerNotification(Long id) {
 
-        if (!notificationRepository.existsById(id)) {
+        Utilisateur utilisateurConnecte = getUtilisateurConnecte();
+
+        Notification notification =
+                notificationRepository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Notification introuvable"
+                                )
+                        );
+
+        if (notification.getUtilisateur() == null
+                || !notification.getUtilisateur().getId()
+                .equals(utilisateurConnecte.getId())) {
+
             throw new RuntimeException(
-                    "Notification introuvable"
+                    "Accès interdit à cette notification."
             );
         }
 
-        notificationRepository.deleteById(id);
+        notificationRepository.delete(notification);
     }
 
     // =====================================================
@@ -125,9 +179,6 @@ public class NotificationServiceImpl
 
             } catch (Exception e) {
 
-                // On ne bloque pas la notification IN_APP
-                // si l'envoi email échoue.
-
                 System.err.println(
                         "Erreur lors de l'envoi email à "
                                 + utilisateur.getEmail()
@@ -137,6 +188,37 @@ public class NotificationServiceImpl
             }
         }
     }
+
+    // =====================================================
+    // UTILISATEUR CONNECTÉ
+    // =====================================================
+    private Utilisateur getUtilisateurConnecte() {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication.getPrincipal() == null) {
+
+            throw new RuntimeException(
+                    "Utilisateur non authentifié."
+            );
+        }
+
+        String email = authentication.getName();
+
+        return utilisateurRepository
+                .findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Utilisateur connecté introuvable."
+                        )
+                );
+    }
+
 
     // =====================================================
     // CONVERSION

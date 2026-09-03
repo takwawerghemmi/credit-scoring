@@ -5,6 +5,7 @@ import com.creditscoring.service.ResponsableDashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,30 +19,35 @@ public class ResponsableDashboardController {
     private final ResponsableDashboardService responsableDashboardService;
 
     /**
-     * Dashboard complet du Responsable.
-     * Contient KPI + dossiers à contrôler + derniers dossiers.
+     * Dashboard complet du Responsable connecté.
      */
     @GetMapping("/dashboard")
     @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
-    public ResponseEntity<ResponsableDashboardResponse> dashboard() {
+    public ResponseEntity<ResponsableDashboardResponse> dashboard(
+            Authentication authentication) {
 
         return ResponseEntity.ok(
-                responsableDashboardService.getDashboard()
+                responsableDashboardService.getDashboard(
+                        authentication.getName()
+                )
         );
     }
 
     /**
-     * Liste uniquement les dossiers qui attendent
-     * la deuxième validation du Responsable.
+     * Liste uniquement les dossiers du Responsable connecté
+     * qui attendent sa deuxième validation.
      */
     @GetMapping("/demandes-a-controler")
     @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
     public ResponseEntity<
             List<ResponsableDashboardResponse.DossierResponsable>
-            > demandesAControler() {
+            > demandesAControler(
+            Authentication authentication) {
 
         ResponsableDashboardResponse dashboard =
-                responsableDashboardService.getDashboard();
+                responsableDashboardService.getDashboard(
+                        authentication.getName()
+                );
 
         return ResponseEntity.ok(
                 dashboard.getDossiersAControler()
@@ -49,16 +55,21 @@ public class ResponsableDashboardController {
     }
 
     /**
-     * Détail d'un dossier.
+     * Détail d'un dossier appartenant au Responsable connecté.
      */
     @GetMapping("/demandes/{id}")
     @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
     public ResponseEntity<
             ResponsableDashboardResponse.DossierResponsable
-            > dossier(@PathVariable Long id) {
+            > dossier(
+            @PathVariable Long id,
+            Authentication authentication) {
 
         return ResponseEntity.ok(
-                responsableDashboardService.getDossier(id)
+                responsableDashboardService.getDossier(
+                        id,
+                        authentication.getName()
+                )
         );
     }
 }

@@ -43,7 +43,8 @@ public class PredictionServiceImpl implements PredictionService {
 
         return new PredictionResponse(
                 decision,
-                creditScore
+                creditScore,
+                probabilityDefault
         );
     }
 

@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
+import com.creditscoring.dto.reponse.ClientRecentDemandeDTO;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -104,15 +104,33 @@ public class ClientPortalServiceImpl implements ClientPortalService {
             );
         });
 
-        List<DemandeCredit> recentApplications =
+        List<ClientRecentDemandeDTO> recentApplications =
                 demandes.stream()
                         .sorted((a, b) -> {
                             if (a.getDateDemande() == null) return 1;
                             if (b.getDateDemande() == null) return -1;
+
                             return b.getDateDemande()
                                     .compareTo(a.getDateDemande());
                         })
                         .limit(5)
+                        .map(d -> ClientRecentDemandeDTO.builder()
+                                .id(d.getId())
+                                .montant(d.getMontant())
+                                .duree(d.getDuree())
+                                .typeCredit(d.getTypeCredit())
+                                .statut(
+                                        d.getStatut() != null
+                                                ? d.getStatut().name()
+                                                : null
+                                )
+                                .revenuMensuel(d.getRevenuMensuel())
+                                .chargesMensuelles(d.getChargesMensuelles())
+                                .dateDemande(d.getDateDemande())
+                                .montantAccorde(d.getMontantAccorde())
+                                .motifRefus(d.getMotifRefus())
+                                .commentaireAnalyse(d.getCommentaireAnalyse())
+                                .build())
                         .toList();
 
         return ClientDashboardDTO.builder()

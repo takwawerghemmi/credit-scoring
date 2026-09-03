@@ -7,9 +7,15 @@ import java.util.List;
 
 public interface DemandeCreditService {
 
-    DemandeCreditResponse creer(DemandeCreditRequest request, String emailUtilisateur);
+    DemandeCreditResponse creer(
+            DemandeCreditRequest request,
+            String emailUtilisateur
+    );
 
-    DemandeCreditResponse modifier(Long id, DemandeCreditRequest request);
+    DemandeCreditResponse modifier(
+            Long id,
+            DemandeCreditRequest request
+    );
 
     DemandeCreditResponse modifierPourUtilisateur(
             Long id,
@@ -18,7 +24,9 @@ public interface DemandeCreditService {
             String role
     );
 
-    DemandeCreditResponse trouverParId(Long id);
+    DemandeCreditResponse trouverParId(
+            Long id
+    );
 
     DemandeCreditResponse trouverParIdPourUtilisateur(
             Long id,
@@ -28,15 +36,24 @@ public interface DemandeCreditService {
 
     List<DemandeCreditResponse> afficherToutes();
 
-    List<DemandeCreditResponse> afficherParClient(Long clientId);
+    List<DemandeCreditResponse> afficherMesDemandes(
+            String emailUtilisateur
+    );
 
-    List<DemandeCreditResponse> afficherMesDemandes(String emailUtilisateur);
-
-    void supprimer(Long id);
+    List<DemandeCreditResponse> afficherParClient(
+            Long clientId
+    );
 
     void supprimerPourUtilisateur(
             Long id,
             String emailUtilisateur,
             String role
+    );
+
+    void supprimer(
+            Long id
+    );
+    List<DemandeCreditResponse> afficherParConseiller(
+            String emailUtilisateur
     );
 }

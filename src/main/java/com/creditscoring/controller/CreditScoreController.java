@@ -5,8 +5,9 @@ import com.creditscoring.dto.reponse.CreditScoreResponse;
 import com.creditscoring.service.CreditScoreService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -15,29 +16,60 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CreditScoreController {
 
-
-
     private final CreditScoreService creditScoreService;
-    @PreAuthorize("hasAnyRole('CONSEILLER', 'RESPONSABLE_CREDIT')")
 
+    // =====================================================
+    // CALCUL SCORE
+    // =====================================================
+
+    @PreAuthorize(
+            "hasAnyRole('CONSEILLER', 'RESPONSABLE_CREDIT')"
+    )
     @PostMapping("/calculer")
     public CreditScoreResponse calculerScore(
-            @Valid @RequestBody CreditScoreRequest request) {
+            @Valid @RequestBody CreditScoreRequest request,
+            Authentication authentication
+    ) {
 
-        return creditScoreService.calculerScore(request);
+        return creditScoreService.calculerScore(
+                request,
+                authentication.getName()
+        );
     }
-    @PreAuthorize("hasAnyRole('CLIENT', 'CONSEILLER', 'RESPONSABLE_CREDIT', 'DIRECTEUR')")
 
+    // =====================================================
+    // GET ALL SCORES ACCESSIBLES
+    // =====================================================
+
+    @PreAuthorize(
+            "hasAnyRole('CLIENT', 'CONSEILLER', 'RESPONSABLE_CREDIT')"
+    )
     @GetMapping
-    public List<CreditScoreResponse> getAllScores() {
-        return creditScoreService.getAllScores();
+    public List<CreditScoreResponse> getAllScores(
+            Authentication authentication
+    ) {
+
+        return creditScoreService.getAllScores(
+                authentication.getName()
+        );
     }
 
-    @PreAuthorize("hasAnyRole('CLIENT', 'CONSEILLER', 'RESPONSABLE_CREDIT', 'DIRECTEUR')")
+    // =====================================================
+    // GET SCORE PAR ID
+    // =====================================================
 
+    @PreAuthorize(
+            "hasAnyRole('CLIENT', 'CONSEILLER', 'RESPONSABLE_CREDIT')"
+    )
     @GetMapping("/{id}")
-    public CreditScoreResponse getScore(@PathVariable Long id) {
-        return creditScoreService.getScore(id);
-    }
+    public CreditScoreResponse getScore(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
 
+        return creditScoreService.getScore(
+                id,
+                authentication.getName()
+        );
+    }
 }

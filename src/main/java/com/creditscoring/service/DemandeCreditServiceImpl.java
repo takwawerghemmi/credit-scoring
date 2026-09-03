@@ -1,5 +1,7 @@
 package com.creditscoring.service;
 
+import com.creditscoring.entity.Conseiller;
+import com.creditscoring.repository.*;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -7,14 +9,9 @@ import com.creditscoring.dto.request.DemandeCreditRequest;
 import com.creditscoring.dto.reponse.DemandeCreditResponse;
 import com.creditscoring.entity.Banque;
 import com.creditscoring.entity.Client;
-import com.creditscoring.entity.Conseiller;
 import com.creditscoring.entity.DemandeCredit;
 import com.creditscoring.enums.StatutDemande;
 import com.creditscoring.mapper.DemandeCreditMapper;
-import com.creditscoring.repository.BanqueRepository;
-import com.creditscoring.repository.ClientRepository;
-import com.creditscoring.repository.ConseillerRepository;
-import com.creditscoring.repository.DemandeCreditRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -27,9 +24,14 @@ public class DemandeCreditServiceImpl
 
     private final DemandeCreditRepository demandeRepository;
     private final ClientRepository clientRepository;
-    private final ConseillerRepository conseillerRepository;
     private final BanqueRepository banqueRepository;
     private final NotificationService notificationService;
+    private final ConseillerRepository conseillerRepository;
+    private final ResponsableCreditRepository responsableCreditRepository;
+    // =========================================================
+    // CRÉER UNE DEMANDE
+    // CLIENT
+    // =========================================================
 
     @Transactional
     @CacheEvict(
@@ -42,6 +44,10 @@ public class DemandeCreditServiceImpl
             String emailUtilisateur
     ) {
 
+        // =====================================================
+        // Récupérer le client connecté
+        // =====================================================
+
         Client client =
                 clientRepository.findByEmail(
                         emailUtilisateur
@@ -51,14 +57,9 @@ public class DemandeCreditServiceImpl
                         )
                 );
 
-        Conseiller conseiller =
-                conseillerRepository.findById(
-                        request.getConseillerId()
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "Conseiller introuvable"
-                        )
-                );
+        // =====================================================
+        // Récupérer la banque
+        // =====================================================
 
         Banque banque =
                 banqueRepository.findById(
@@ -68,6 +69,16 @@ public class DemandeCreditServiceImpl
                                 "Banque introuvable"
                         )
                 );
+
+        // =====================================================
+        // Créer la demande
+        //
+        // IMPORTANT:
+        // Le Client ne choisit ni Conseiller
+        // ni Responsable.
+        //
+        // L'affectation sera faite ensuite par l'ADMIN.
+        // =====================================================
 
         DemandeCredit demande =
                 DemandeCredit.builder()
@@ -90,7 +101,6 @@ public class DemandeCreditServiceImpl
                                 StatutDemande.EN_ATTENTE
                         )
                         .client(client)
-                        .conseiller(conseiller)
                         .banque(banque)
                         .build();
 
@@ -99,26 +109,20 @@ public class DemandeCreditServiceImpl
         );
 
         // =====================================================
-        // NOTIFICATION CONSEILLER
+        // Pas de notification Conseiller ici.
+        //
+        // La notification sera envoyée par l'ADMIN
+        // lorsqu'il affectera la demande.
         // =====================================================
-
-        notificationService.creerNotificationAutomatique(
-                conseiller,
-                demande,
-                "Nouvelle demande de crédit",
-                "La demande de crédit #"
-                        + demande.getId()
-                        + " du client "
-                        + client.getPrenom()
-                        + " "
-                        + client.getNom()
-                        + " est en attente d'analyse."
-        );
 
         return DemandeCreditMapper.toResponse(
                 demande
         );
     }
+
+    // =========================================================
+    // MODIFIER UNE DEMANDE
+    // =========================================================
 
     @Transactional
     @CacheEvict(
@@ -144,19 +148,15 @@ public class DemandeCreditServiceImpl
                 demande.getClient();
 
         if (client == null) {
+
             throw new RuntimeException(
                     "Client de la demande introuvable"
             );
         }
 
-        Conseiller conseiller =
-                conseillerRepository.findById(
-                        request.getConseillerId()
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "Conseiller introuvable"
-                        )
-                );
+        // =====================================================
+        // Banque
+        // =====================================================
 
         Banque banque =
                 banqueRepository.findById(
@@ -166,6 +166,10 @@ public class DemandeCreditServiceImpl
                                 "Banque introuvable"
                         )
                 );
+
+        // =====================================================
+        // Mise à jour
+        // =====================================================
 
         demande.setMontant(
                 request.getMontant()
@@ -187,9 +191,13 @@ public class DemandeCreditServiceImpl
                 request.getChargesMensuelles()
         );
 
-        demande.setClient(client);
-        demande.setConseiller(conseiller);
-        demande.setBanque(banque);
+        demande.setClient(
+                client
+        );
+
+        demande.setBanque(
+                banque
+        );
 
         demandeRepository.save(
                 demande
@@ -199,6 +207,10 @@ public class DemandeCreditServiceImpl
                 demande
         );
     }
+
+    // =========================================================
+    // MODIFIER POUR UN UTILISATEUR
+    // =========================================================
 
     @Override
     public DemandeCreditResponse modifierPourUtilisateur(
@@ -216,6 +228,10 @@ public class DemandeCreditServiceImpl
                                 "Demande introuvable"
                         )
                 );
+
+        // =====================================================
+        // CLIENT
+        // =====================================================
 
         if ("ROLE_CLIENT".equals(role)) {
 
@@ -246,6 +262,10 @@ public class DemandeCreditServiceImpl
         );
     }
 
+    // =========================================================
+    // TROUVER PAR ID
+    // =========================================================
+
     @Override
     public DemandeCreditResponse trouverParId(
             Long id
@@ -265,6 +285,10 @@ public class DemandeCreditServiceImpl
         );
     }
 
+    // =========================================================
+    // TROUVER PAR ID POUR UN UTILISATEUR
+    // =========================================================
+
     @Override
     public DemandeCreditResponse trouverParIdPourUtilisateur(
             Long id,
@@ -281,36 +305,95 @@ public class DemandeCreditServiceImpl
                         )
                 );
 
+        // =====================================================
+        // CONSEILLER
+        //
+        // Il ne doit voir que ses demandes affectées.
+        // =====================================================
+
         if ("ROLE_CONSEILLER".equals(role)) {
+
+            if (demande.getConseiller() == null
+                    || demande.getConseiller()
+                    .getEmail() == null
+                    || !demande.getConseiller()
+                    .getEmail()
+                    .equalsIgnoreCase(
+                            emailUtilisateur
+                    )) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande n'est pas affectée à ce Conseiller."
+                );
+            }
+
             return DemandeCreditMapper.toResponse(
                     demande
             );
         }
 
-        Client client =
-                clientRepository.findByEmail(
-                        emailUtilisateur
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "Client connecté introuvable"
-                        )
+        // =====================================================
+        // RESPONSABLE CRÉDIT
+        //
+        // Il ne doit voir que ses demandes affectées.
+        // =====================================================
+
+        if ("ROLE_RESPONSABLE_CREDIT".equals(role)) {
+
+            if (demande.getResponsable() == null
+                    || demande.getResponsable()
+                    .getEmail() == null
+                    || !demande.getResponsable()
+                    .getEmail()
+                    .equalsIgnoreCase(
+                            emailUtilisateur
+                    )) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande n'est pas affectée à ce Responsable."
                 );
+            }
 
-        if (demande.getClient() == null
-                || !demande
-                .getClient()
-                .getId()
-                .equals(client.getId())) {
-
-            throw new RuntimeException(
-                    "Accès interdit : cette demande ne vous appartient pas"
+            return DemandeCreditMapper.toResponse(
+                    demande
             );
+        }
+
+        // =====================================================
+        // CLIENT
+        // =====================================================
+
+        if ("ROLE_CLIENT".equals(role)) {
+
+            Client client =
+                    clientRepository.findByEmail(
+                            emailUtilisateur
+                    ).orElseThrow(() ->
+                            new RuntimeException(
+                                    "Client connecté introuvable"
+                            )
+                    );
+
+            if (demande.getClient() == null
+                    || !demande
+                    .getClient()
+                    .getId()
+                    .equals(client.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande ne vous appartient pas"
+                );
+            }
         }
 
         return DemandeCreditMapper.toResponse(
                 demande
         );
     }
+
+    // =========================================================
+    // AFFICHER TOUTES LES DEMANDES
+    // =========================================================
 
     @Override
     public List<DemandeCreditResponse> afficherToutes() {
@@ -322,6 +405,10 @@ public class DemandeCreditServiceImpl
                 )
                 .toList();
     }
+
+    // =========================================================
+    // MES DEMANDES - CLIENT
+    // =========================================================
 
     @Override
     public List<DemandeCreditResponse> afficherMesDemandes(
@@ -348,19 +435,29 @@ public class DemandeCreditServiceImpl
                 .toList();
     }
 
+    // =========================================================
+    // DEMANDES PAR CLIENT
+    // =========================================================
+
     @Override
     public List<DemandeCreditResponse> afficherParClient(
             Long clientId
     ) {
 
         return demandeRepository
-                .findByClientId(clientId)
+                .findByClientId(
+                        clientId
+                )
                 .stream()
                 .map(
                         DemandeCreditMapper::toResponse
                 )
                 .toList();
     }
+
+    // =========================================================
+    // SUPPRIMER POUR UN UTILISATEUR
+    // =========================================================
 
     @Override
     @Transactional
@@ -375,12 +472,17 @@ public class DemandeCreditServiceImpl
     ) {
 
         DemandeCredit demande =
-                demandeRepository.findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Demande introuvable"
-                                )
-                        );
+                demandeRepository.findById(
+                        id
+                ).orElseThrow(() ->
+                        new RuntimeException(
+                                "Demande introuvable"
+                        )
+                );
+
+        // =====================================================
+        // CLIENT
+        // =====================================================
 
         if ("ROLE_CLIENT".equals(role)) {
 
@@ -410,6 +512,10 @@ public class DemandeCreditServiceImpl
         );
     }
 
+    // =========================================================
+    // SUPPRIMER
+    // =========================================================
+
     @Override
     @Transactional
     @CacheEvict(
@@ -420,6 +526,28 @@ public class DemandeCreditServiceImpl
             Long id
     ) {
 
-        demandeRepository.deleteById(id);
+        demandeRepository.deleteById(
+                id
+        );
+    }
+    @Override
+    public List<DemandeCreditResponse> afficherParConseiller(
+            String emailUtilisateur
+    ) {
+
+        Conseiller conseiller =
+                conseillerRepository
+                        .findByEmail(emailUtilisateur)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Conseiller connecté introuvable"
+                                )
+                        );
+
+        return demandeRepository
+                .findByConseillerId(conseiller.getId())
+                .stream()
+                .map(DemandeCreditMapper::toResponse)
+                .toList();
     }
 }

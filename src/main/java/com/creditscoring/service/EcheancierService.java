@@ -9,18 +9,29 @@ import java.util.List;
 
 public interface EcheancierService {
 
-    // Calcul théorique de l'amortissement
+    // =====================================================
+    // CALCUL THÉORIQUE DE L'AMORTISSEMENT
+    // =====================================================
+
     List<AmortissementResponse> genererEcheancier(
-            DemandeCredit demandeCredit
+            DemandeCredit demandeCredit,
+            String email
     );
 
-    // Créer les échéances réelles dans la base
+    // =====================================================
+    // CRÉER LES ÉCHÉANCES RÉELLES
+    // =====================================================
+
     List<EcheanceResponse> creerEcheances(
             Contrat contrat
     );
 
-    // Récupérer les échéances d'un contrat
+    // =====================================================
+    // RÉCUPÉRER LES ÉCHÉANCES D'UN CONTRAT
+    // =====================================================
+
     List<EcheanceResponse> getEcheancesByContrat(
-            Long contratId
+            Long contratId,
+            String email
     );
 }

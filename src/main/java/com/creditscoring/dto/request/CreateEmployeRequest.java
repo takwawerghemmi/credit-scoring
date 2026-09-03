@@ -26,4 +26,8 @@ public class CreateEmployeRequest {
 
     @NotBlank
     private String matricule;
+
+    private Long banqueId;
+
+    private Long agenceId;
 }

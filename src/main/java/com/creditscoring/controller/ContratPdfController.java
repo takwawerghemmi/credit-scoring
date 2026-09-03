@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,16 +21,65 @@ public class ContratPdfController {
     private final ContratService contratService;
 
     @GetMapping("/pdf/{id}")
-    @PreAuthorize("hasAnyRole('CLIENT','DIRECTEUR','ADMIN')")
+    @PreAuthorize(
+            "hasAnyRole('CLIENT','RESPONSABLE_CREDIT','ADMIN')"
+    )
     public ResponseEntity<byte[]> genererPdf(
-            @PathVariable Long id
+            @PathVariable Long id,
+            Authentication authentication
     ) {
 
         Contrat contrat =
-                contratService.getContratById(id);
+                contratService.getContratById(
+                        id
+                );
+
+        String email =
+                authentication.getName();
+
+        boolean admin =
+                authentication.getAuthorities()
+                        .stream()
+                        .anyMatch(
+                                authority ->
+                                        authority.getAuthority()
+                                                .equals(
+                                                        "ROLE_ADMIN"
+                                                )
+                        );
+
+        boolean responsable =
+                contrat.getUtilisateur() != null
+                        && contrat.getUtilisateur()
+                        .getEmail()
+                        .equals(
+                                email
+                        );
+
+        boolean client =
+                contrat.getDemandeCredit() != null
+                        && contrat.getDemandeCredit()
+                        .getClient() != null
+                        && contrat.getDemandeCredit()
+                        .getClient()
+                        .getEmail()
+                        .equals(
+                                email
+                        );
+
+        if (!admin
+                && !responsable
+                && !client) {
+
+            throw new RuntimeException(
+                    "Accès interdit à ce contrat."
+            );
+        }
 
         byte[] pdf =
-                contratPdfService.genererContratPdf(contrat);
+                contratPdfService.genererContratPdf(
+                        contrat
+                );
 
         String numero =
                 contrat.getNumeroContrat() != null
@@ -37,17 +87,25 @@ public class ContratPdfController {
                         : String.valueOf(id);
 
         String filename =
-                "Contrat_CREDITNOVA_" + numero + ".pdf";
+                "Contrat_CREDITNOVA_"
+                        + numero
+                        + ".pdf";
 
         return ResponseEntity.ok()
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + filename + "\""
+                        "attachment; filename=\""
+                                + filename
+                                + "\""
                 )
                 .contentType(
                         MediaType.APPLICATION_PDF
                 )
-                .contentLength(pdf.length)
-                .body(pdf);
+                .contentLength(
+                        pdf.length
+                )
+                .body(
+                        pdf
+                );
     }
 }

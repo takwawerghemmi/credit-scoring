@@ -2,11 +2,16 @@ package com.creditscoring.service;
 
 import com.creditscoring.dto.reponse.CreditScoreResponse;
 import com.creditscoring.dto.request.CreditScoreRequest;
+import com.creditscoring.entity.Client;
+import com.creditscoring.entity.Conseiller;
 import com.creditscoring.entity.CreditScore;
 import com.creditscoring.entity.DemandeCredit;
+import com.creditscoring.entity.ResponsableCredit;
+import com.creditscoring.entity.Utilisateur;
 import com.creditscoring.enums.NiveauRisque;
 import com.creditscoring.repository.CreditScoreRepository;
 import com.creditscoring.repository.DemandeCreditRepository;
+import com.creditscoring.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +26,7 @@ public class CreditScoreServiceImpl
 
     private final CreditScoreRepository creditScoreRepository;
     private final DemandeCreditRepository demandeCreditRepository;
+    private final UtilisateurRepository utilisateurRepository;
     private final MlScoringClient mlScoringClient;
 
     // =========================================================
@@ -29,7 +35,8 @@ public class CreditScoreServiceImpl
 
     @Override
     public CreditScoreResponse calculerScore(
-            CreditScoreRequest request
+            CreditScoreRequest request,
+            String emailUtilisateur
     ) {
 
         if (request == null
@@ -42,14 +49,26 @@ public class CreditScoreServiceImpl
 
         DemandeCredit demande =
                 demandeCreditRepository
-                        .findById(
-                                request.getDemandeCreditId()
-                        )
+                        .findById(request.getDemandeCreditId())
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Demande introuvable"
                                 )
                         );
+
+        Utilisateur utilisateur =
+                utilisateurRepository
+                        .findByEmail(emailUtilisateur)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Utilisateur connecté introuvable."
+                                )
+                        );
+
+        verifierAccesDemande(
+                demande,
+                utilisateur
+        );
 
         if (demande.getClient() == null) {
 
@@ -59,38 +78,26 @@ public class CreditScoreServiceImpl
         }
 
         // =====================================================
-        // Appel au modèle ML
+        // Appel ML
         // =====================================================
 
         Map<String, Object> mlResult =
-                mlScoringClient.predict(
-                        demande
-                );
+                mlScoringClient.predict(demande);
 
         double score =
                 toDouble(
-                        mlResult.get(
-                                "credit_score"
-                        )
+                        mlResult.get("credit_score")
                 );
 
         double probabilityDefault =
                 toDouble(
-                        mlResult.get(
-                                "probability_default"
-                        )
+                        mlResult.get("probability_default")
                 );
 
         String riskLevel =
                 String.valueOf(
-                        mlResult.get(
-                                "risk_level"
-                        )
+                        mlResult.get("risk_level")
                 );
-
-        // =====================================================
-        // Décision UNIQUE basée sur la probabilité de défaut
-        // =====================================================
 
         String decision =
                 calculerDecision(
@@ -103,35 +110,54 @@ public class CreditScoreServiceImpl
                 );
 
         // =====================================================
-        // Persistance
+        // IMPORTANT :
+        // UPDATE si le score existe déjà
+        // INSERT sinon
         // =====================================================
 
         CreditScore entity =
-                CreditScore.builder()
-                        .score(score)
-                        .niveauRisque(niveauRisque)
-                        .dateCalcul(LocalDateTime.now())
-                        .scoreConfiance(
-                                Math.max(
-                                        0.0,
-                                        Math.min(
-                                                1.0,
-                                                1.0
-                                                        - probabilityDefault
-                                        )
-                                )
+                creditScoreRepository
+                        .findByDemandeCreditId(
+                                demande.getId()
                         )
-                        .detailsScore(
-                                "Modèle ML CatBoost - "
-                                        + "probabilité de défaut : "
-                                        + probabilityDefault
+                        .orElseGet(
+                                CreditScore::new
+                        );
+
+        entity.setScore(score);
+
+        entity.setNiveauRisque(
+                niveauRisque
+        );
+
+        entity.setDateCalcul(
+                LocalDateTime.now()
+        );
+
+        entity.setScoreConfiance(
+                Math.max(
+                        0.0,
+                        Math.min(
+                                1.0,
+                                1.0 - probabilityDefault
                         )
-                        .recommandation(
-                                "Décision calculée par le modèle ML : "
-                                        + decision
-                        )
-                        .demandeCredit(demande)
-                        .build();
+                )
+        );
+
+        entity.setDetailsScore(
+                "Modèle ML CatBoost - "
+                        + "probabilité de défaut : "
+                        + probabilityDefault
+        );
+
+        entity.setRecommandation(
+                "Décision calculée par le modèle ML : "
+                        + decision
+        );
+
+        entity.setDemandeCredit(
+                demande
+        );
 
         creditScoreRepository.save(
                 entity
@@ -144,21 +170,62 @@ public class CreditScoreServiceImpl
     }
 
     // =========================================================
-    // TOUS LES SCORES
+    // TOUS LES SCORES ACCESSIBLES
     // =========================================================
 
     @Override
-    public List<CreditScoreResponse> getAllScores() {
+    public List<CreditScoreResponse> getAllScores(
+            String emailUtilisateur
+    ) {
 
-        return creditScoreRepository
-                .findAll()
+        Utilisateur utilisateur =
+                utilisateurRepository
+                        .findByEmail(emailUtilisateur)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Utilisateur connecté introuvable."
+                                )
+                        );
+
+        List<CreditScore> scores;
+
+        if (utilisateur instanceof Conseiller conseiller) {
+
+            scores =
+                    creditScoreRepository
+                            .findByDemandeCreditConseillerId(
+                                    conseiller.getId()
+                            );
+
+        } else if (utilisateur instanceof ResponsableCredit responsable) {
+
+            scores =
+                    creditScoreRepository
+                            .findByDemandeCreditResponsableId(
+                                    responsable.getId()
+                            );
+
+        } else if (utilisateur instanceof Client client) {
+
+            scores =
+                    creditScoreRepository
+                            .findByDemandeCreditClientId(
+                                    client.getId()
+                            );
+
+        } else {
+
+            throw new RuntimeException(
+                    "Accès interdit."
+            );
+        }
+
+        return scores
                 .stream()
                 .map(score -> {
 
                     String decision =
-                            extraireDecision(
-                                    score
-                            );
+                            extraireDecision(score);
 
                     return convertirResponse(
                             score,
@@ -174,7 +241,8 @@ public class CreditScoreServiceImpl
 
     @Override
     public CreditScoreResponse getScore(
-            Long id
+            Long id,
+            String emailUtilisateur
     ) {
 
         CreditScore score =
@@ -186,10 +254,22 @@ public class CreditScoreServiceImpl
                                 )
                         );
 
+        Utilisateur utilisateur =
+                utilisateurRepository
+                        .findByEmail(emailUtilisateur)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Utilisateur connecté introuvable."
+                                )
+                        );
+
+        verifierAccesDemande(
+                score.getDemandeCredit(),
+                utilisateur
+        );
+
         String decision =
-                extraireDecision(
-                        score
-                );
+                extraireDecision(score);
 
         return convertirResponse(
                 score,
@@ -198,7 +278,88 @@ public class CreditScoreServiceImpl
     }
 
     // =========================================================
-    // CONVERSION ENTITY -> RESPONSE
+    // VÉRIFICATION ACCÈS
+    // =========================================================
+
+    private void verifierAccesDemande(
+            DemandeCredit demande,
+            Utilisateur utilisateur
+    ) {
+
+        if (demande == null) {
+
+            throw new RuntimeException(
+                    "Demande introuvable."
+            );
+        }
+
+        // -----------------------------------------------------
+        // CLIENT
+        // -----------------------------------------------------
+
+        if (utilisateur instanceof Client client) {
+
+            if (demande.getClient() == null
+                    || !demande.getClient()
+                    .getId()
+                    .equals(client.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande "
+                                + "n'appartient pas au Client connecté."
+                );
+            }
+
+            return;
+        }
+
+        // -----------------------------------------------------
+        // CONSEILLER
+        // -----------------------------------------------------
+
+        if (utilisateur instanceof Conseiller conseiller) {
+
+            if (demande.getConseiller() == null
+                    || !demande.getConseiller()
+                    .getId()
+                    .equals(conseiller.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande "
+                                + "est affectée à un autre Conseiller."
+                );
+            }
+
+            return;
+        }
+
+        // -----------------------------------------------------
+        // RESPONSABLE
+        // -----------------------------------------------------
+
+        if (utilisateur instanceof ResponsableCredit responsable) {
+
+            if (demande.getResponsable() == null
+                    || !demande.getResponsable()
+                    .getId()
+                    .equals(responsable.getId())) {
+
+                throw new RuntimeException(
+                        "Accès interdit : cette demande "
+                                + "est affectée à un autre Responsable."
+                );
+            }
+
+            return;
+        }
+
+        throw new RuntimeException(
+                "Accès interdit."
+        );
+    }
+
+    // =========================================================
+    // ENTITY -> RESPONSE
     // =========================================================
 
     private CreditScoreResponse convertirResponse(
@@ -229,7 +390,7 @@ public class CreditScoreServiceImpl
     }
 
     // =========================================================
-    // EXTRAIRE LA DÉCISION STOCKÉE
+    // EXTRAIRE DECISION
     // =========================================================
 
     private String extraireDecision(
@@ -244,9 +405,7 @@ public class CreditScoreServiceImpl
 
             String decision =
                     recommandation.substring(
-                            recommandation
-                                    .lastIndexOf(":")
-                                    + 1
+                            recommandation.lastIndexOf(":") + 1
                     ).trim();
 
             if ("ACCEPTE".equalsIgnoreCase(
@@ -261,10 +420,6 @@ public class CreditScoreServiceImpl
                 return "REFUSE";
             }
         }
-
-        // -----------------------------------------------------
-        // Fallback pour anciens scores
-        // -----------------------------------------------------
 
         if (score.getNiveauRisque() ==
                 NiveauRisque.TRES_FAIBLE
@@ -286,7 +441,7 @@ public class CreditScoreServiceImpl
     }
 
     // =========================================================
-    // DÉCISION ML
+    // DÉCISION
     // =========================================================
 
     private String calculerDecision(
@@ -299,7 +454,7 @@ public class CreditScoreServiceImpl
     }
 
     // =========================================================
-    // CONVERSION NIVEAU RISQUE
+    // NIVEAU RISQUE
     // =========================================================
 
     private NiveauRisque convertirNiveauRisque(
@@ -329,7 +484,7 @@ public class CreditScoreServiceImpl
     }
 
     // =========================================================
-    // CONVERSION DOUBLE
+    // DOUBLE
     // =========================================================
 
     private double toDouble(

@@ -18,7 +18,7 @@ public class DecisionCreditController {
     private final DecisionCreditService decisionCreditService;
 
     @PostMapping
-    @PreAuthorize("hasRole('DIRECTEUR')")
+    @PreAuthorize("hasRole('RESPONSABLE_CREDIT')")
     public ResponseEntity<DecisionResponse> prendreDecision(
             @Valid @RequestBody DecisionRequest request,
             Authentication authentication
@@ -32,14 +32,14 @@ public class DecisionCreditController {
                                 authority.getAuthority())
                         .orElse("");
 
-        String emailDirecteur =
+        String emailResponsable =
                 authentication.getName();
 
         return ResponseEntity.ok(
                 decisionCreditService.prendreDecision(
                         request,
                         role,
-                        emailDirecteur
+                        emailResponsable
                 )
         );
     }

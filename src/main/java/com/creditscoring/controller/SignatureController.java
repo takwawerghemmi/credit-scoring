@@ -6,6 +6,7 @@ import com.creditscoring.service.SignatureService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,13 +21,33 @@ public class SignatureController {
     @PostMapping("/{contratId}")
     @PreAuthorize("hasRole('CLIENT')")
     public ResponseEntity<String> signer(
-            @PathVariable Long contratId
+            @PathVariable Long contratId,
+            Authentication authentication
     ) {
 
         Contrat contrat =
                 contratService.getContratById(
                         contratId
                 );
+
+        // =====================================================
+        // Vérifier que le contrat appartient au client connecté
+        // =====================================================
+
+        if (contrat.getDemandeCredit() == null
+                || contrat.getDemandeCredit()
+                .getClient() == null
+                || !contrat.getDemandeCredit()
+                .getClient()
+                .getEmail()
+                .equals(
+                        authentication.getName()
+                )) {
+
+            throw new RuntimeException(
+                    "Accès interdit : ce contrat n'appartient pas au client connecté."
+            );
+        }
 
         return ResponseEntity.ok(
                 signatureService.signerContrat(
