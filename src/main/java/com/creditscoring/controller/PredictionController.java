@@ -1,16 +1,19 @@
 package com.creditscoring.controller;
 
+import com.creditscoring.dto.reponse.ExplicationFacteurResponse;
 import com.creditscoring.dto.reponse.PredictionResponse;
+import com.creditscoring.entity.Client;
 import com.creditscoring.entity.Conseiller;
 import com.creditscoring.entity.DemandeCredit;
 import com.creditscoring.entity.ResponsableCredit;
-import com.creditscoring.entity.Client;
 import com.creditscoring.entity.Utilisateur;
 import com.creditscoring.repository.DemandeCreditRepository;
 import com.creditscoring.repository.UtilisateurRepository;
+import com.creditscoring.service.MlScoringClient;
 import com.creditscoring.service.PredictionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,10 +24,16 @@ import org.springframework.web.bind.annotation.*;
 public class PredictionController {
 
     private final PredictionService predictionService;
+    private final MlScoringClient mlScoringClient;
     private final DemandeCreditRepository demandeCreditRepository;
     private final UtilisateurRepository utilisateurRepository;
 
+    // =========================================================
+    // PREDICTION
+    // =========================================================
+
     @GetMapping("/{demandeId}")
+    @PreAuthorize("hasAnyRole('CLIENT', 'CONSEILLER', 'RESPONSABLE_CREDIT')")
     public ResponseEntity<PredictionResponse> predire(
             @PathVariable Long demandeId,
             Authentication authentication
@@ -53,6 +62,45 @@ public class PredictionController {
                 predictionService.predire(demande)
         );
     }
+
+    // =========================================================
+    // EXPLICATION DE LA PREDICTION
+    // =========================================================
+
+    @GetMapping("/{demandeId}/explanation")
+    @PreAuthorize("hasAnyRole('CLIENT', 'CONSEILLER', 'RESPONSABLE_CREDIT')")
+    public ResponseEntity<ExplicationFacteurResponse> expliquer(
+            @PathVariable Long demandeId,
+            Authentication authentication
+    ) {
+
+        DemandeCredit demande =
+                demandeCreditRepository.findById(demandeId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Demande introuvable"
+                                )
+                        );
+
+        Utilisateur utilisateur =
+                utilisateurRepository.findByEmail(
+                        authentication.getName()
+                ).orElseThrow(() ->
+                        new RuntimeException(
+                                "Utilisateur connecté introuvable."
+                        )
+                );
+
+        verifierAcces(demande, utilisateur);
+
+        return ResponseEntity.ok(
+                mlScoringClient.getExplication(demande)
+        );
+    }
+
+    // =========================================================
+    // VERIFICATION DES DROITS D'ACCES
+    // =========================================================
 
     private void verifierAcces(
             DemandeCredit demande,

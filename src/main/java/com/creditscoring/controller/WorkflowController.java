@@ -18,12 +18,6 @@ import org.springframework.web.bind.annotation.*;
 public class WorkflowController {
 
     private final WorkflowService workflowService;
-
-    // =====================================================
-    // TRANSITION
-    // CONSEILLER + RESPONSABLE CRÉDIT
-    // =====================================================
-
     @PreAuthorize(
             "hasAnyRole('CONSEILLER', 'RESPONSABLE_CREDIT')"
     )

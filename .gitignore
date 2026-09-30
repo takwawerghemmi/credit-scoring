@@ -62,3 +62,6 @@ uploads/
 cp.txt
 *.whl
 *.code-workspace
+.venv-ml/
+__pycache__/
+*.pyc

@@ -1,30 +1,35 @@
 package com.creditscoring.service;
 
+import com.creditscoring.dto.reponse.ExplicationFacteurResponse;
 import com.creditscoring.entity.Client;
 import com.creditscoring.entity.DemandeCredit;
 import com.creditscoring.entity.Utilisateur;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MlScoringClient {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    private static final String ML_URL =
-            "http://localhost:8000/predict";
+    @Value("${app.ml.url:http://localhost:8000}")
+    private String mlBaseUrl;
 
-    public Map<String, Object> predict(
-            DemandeCredit demande
-    ) {
+    public Map<String, Object> predict(DemandeCredit demande) {
 
         if (demande == null) {
             throw new RuntimeException("Demande introuvable");
@@ -104,25 +109,171 @@ public class MlScoringClient {
                         : "none"
         );
 
-        ResponseEntity<Map> response =
-                restTemplate.postForEntity(
-                        ML_URL,
-                        payload,
-                        Map.class
+        try {
+
+            ResponseEntity<Map> response =
+                    restTemplate.postForEntity(
+                            mlBaseUrl + "/predict",
+                            payload,
+                            Map.class
+                    );
+
+            if (!response.getStatusCode().is2xxSuccessful()
+                    || response.getBody() == null) {
+
+                log.error(
+                        "Réponse invalide du service ML"
                 );
 
-        if (!response.getStatusCode().is2xxSuccessful()
-                || response.getBody() == null) {
+                return fallbackResult(demande);
+            }
 
-            throw new RuntimeException(
-                    "Le service ML n'a pas répondu correctement"
+            return response.getBody();
+
+        } catch (RestClientException e) {
+
+            log.error(
+                    "Service ML indisponible : {}",
+                    e.getMessage()
             );
-        }
 
-        return response.getBody();
+            return fallbackResult(demande);
+        }
     }
 
-    private int calculerAge(LocalDate dateNaissance) {
+    public ExplicationFacteurResponse getExplication(
+            DemandeCredit demande
+    ) {
+
+        Map<String, Object> result = predict(demande);
+
+        double probabiliteDefaut =
+                toDouble(
+                        result.get("probability_default")
+                );
+
+        double creditScore =
+                toDouble(
+                        result.get("credit_score")
+                );
+
+        String niveauRisque =
+                result.get("risk_level") != null
+                        ? String.valueOf(
+                        result.get("risk_level")
+                )
+                        : "INCONNU";
+
+        List<ExplicationFacteurResponse.FacteurResponse> facteurs =
+                new ArrayList<>();
+
+        Object rawFactors =
+                result.get("factors");
+
+        if (rawFactors instanceof List<?> factorList) {
+
+            for (Object item : factorList) {
+
+                if (item instanceof Map<?, ?> factorMap) {
+
+                    ExplicationFacteurResponse.FacteurResponse facteur =
+                            ExplicationFacteurResponse.FacteurResponse
+                                    .builder()
+                                    .feature(
+                                            factorMap.get("feature") != null
+                                                    ? String.valueOf(
+                                                    factorMap.get("feature")
+                                            )
+                                                    : null
+                                    )
+                                    .impact(
+                                            factorMap.get("impact") != null
+                                                    ? String.valueOf(
+                                                    factorMap.get("impact")
+                                            )
+                                                    : null
+                                    )
+                                    .contribution(
+                                            toDoubleOrNull(
+                                                    factorMap.get(
+                                                            "contribution"
+                                                    )
+                                            )
+                                    )
+                                    .build();
+
+                    facteurs.add(facteur);
+                }
+            }
+        }
+
+        return ExplicationFacteurResponse.builder()
+                .demandeCreditId(
+                        demande.getId()
+                )
+                .creditScore(
+                        creditScore
+                )
+                .niveauRisque(
+                        niveauRisque
+                )
+                .probabiliteDefaut(
+                        probabiliteDefaut
+                )
+                .facteurs(
+                        facteurs
+                )
+                .build();
+    }
+
+    private Map<String, Object> fallbackResult(
+            DemandeCredit demande
+    ) {
+
+        log.warn(
+                "Fallback ML activé pour la demande {}",
+                demande.getId()
+        );
+
+        Map<String, Object> fallback =
+                new HashMap<>();
+
+        fallback.put(
+                "prediction",
+                -1
+        );
+
+        fallback.put(
+                "probability_default",
+                -1.0
+        );
+
+        fallback.put(
+                "risk_level",
+                "INCONNU"
+        );
+
+        fallback.put(
+                "credit_score",
+                -1
+        );
+
+        fallback.put(
+                "factors",
+                List.of()
+        );
+
+        fallback.put(
+                "fallback",
+                true
+        );
+
+        return fallback;
+    }
+
+    private int calculerAge(
+            LocalDate dateNaissance
+    ) {
 
         if (dateNaissance == null) {
             return 30;
@@ -167,5 +318,47 @@ public class MlScoringClient {
         }
 
         return value.trim().toLowerCase();
+    }
+
+    private double toDouble(
+            Object value
+    ) {
+
+        if (value == null) {
+            return 0.0;
+        }
+
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+
+        try {
+            return Double.parseDouble(
+                    value.toString()
+            );
+        } catch (Exception e) {
+            return 0.0;
+        }
+    }
+
+    private Double toDoubleOrNull(
+            Object value
+    ) {
+
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+
+        try {
+            return Double.parseDouble(
+                    value.toString()
+            );
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
